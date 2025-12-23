@@ -1,0 +1,30 @@
+{
+  "name": "unraid-bin-pack",
+  "module": "src/main.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "check": "bun run typecheck && bun run lint && bun test",
+    "dev": "bun run src/main.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@typescript-eslint/eslint-plugin": "^8.50.1",
+    "@typescript-eslint/parser": "^8.50.1",
+    "eslint": "^9.39.2",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@effect/cli": "^0.73.0",
+    "@effect/platform": "^0.94.0",
+    "@effect/platform-bun": "^0.87.0",
+    "@effect/platform-node": "^0.104.0",
+    "@effect/schema": "^0.75.5",
+    "check-disk-space": "^3.4.0",
+    "effect": "^3.19.13"
+  }
+}
