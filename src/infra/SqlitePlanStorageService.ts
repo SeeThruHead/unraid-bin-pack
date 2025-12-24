@@ -106,7 +106,7 @@ const matchDeleteError = (path: string) =>
 export const SqlitePlanStorageService = Layer.succeed(
   PlanStorageServiceTag,
   (() => {
-    const defaultPath = `${process.env.HOME}/.unraid-bin-pack/plan.db`
+    const defaultPath = `/mnt/user/appdata/unraid-bin-pack/plan.db`
 
     const openDb = (path: string): Effect.Effect<Database, PlanStorageError> =>
       Effect.try({

@@ -59,9 +59,10 @@ Options:
   --algorithm <alg>        Packing algorithm: best-fit, first-fit (default: best-fit)
   --min-split-size <sz>    Min folder size to split (default: 1GB)
   --folder-threshold <n>   Ratio for keeping folders together (default: 0.9)
-  --plan-file <path>       Where to save the plan (default: ~/.unraid-bin-pack/plan.json)
+  --plan-file <path>       Where to save the plan (default: /mnt/user/appdata/unraid-bin-pack/plan.db)
   --exclude <patterns>     Glob patterns to exclude
   --force                  Overwrite existing partial plan without prompting
+  --storage <backend>      Storage backend: sqlite (default) or json
 ```
 
 ### `apply` - Execute a saved plan
@@ -72,9 +73,10 @@ Executes the move plan, transferring files using rsync.
 unraid-bin-pack apply [options]
 
 Options:
-  --plan-file <path>       Plan file to apply (default: ~/.unraid-bin-pack/plan.json)
+  --plan-file <path>       Plan file to apply (default: /mnt/user/appdata/unraid-bin-pack/plan.db)
   --dry-run                Show what would happen without moving files
   --concurrency <n>        Parallel transfers per disk (default: 4)
+  --storage <backend>      Storage backend: sqlite (default) or json
 ```
 
 ## Safety Features

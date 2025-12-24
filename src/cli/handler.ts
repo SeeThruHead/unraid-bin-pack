@@ -14,6 +14,7 @@ import { ScannerServiceTag, ScannerServiceLive } from "../services/ScannerServic
 import { BinPackServiceTag, BinPackServiceLive } from "../services/BinPackService"
 import { TransferServiceTag, RsyncTransferService } from "../services/TransferService"
 import { PlanStorageServiceTag, JsonPlanStorageService } from "../infra/PlanStorageService"
+import { SqlitePlanStorageService } from "../infra/SqlitePlanStorageService"
 import { GlobServiceLive } from "../infra/GlobService"
 import { FileStatServiceLive } from "../infra/FileStatService"
 import { ShellServiceLive } from "../infra/ShellService"
@@ -416,17 +417,26 @@ export const runApply = (options: ApplyOptions) =>
 // Full live layer
 // =============================================================================
 
-export const AppLive = pipe(
-  Layer.mergeAll(
-    DiskServiceFullLive,
-    pipe(
-      ScannerServiceLive,
-      Layer.provide(GlobServiceLive),
-      Layer.provide(FileStatServiceLive),
-      Layer.provide(BunContext.layer)
-    ),
-    BinPackServiceLive,
-    pipe(RsyncTransferService, Layer.provide(ShellServiceLive)),
-    pipe(JsonPlanStorageService, Layer.provide(BunContext.layer))
+export const createAppLayer = (storage: "json" | "sqlite") => {
+  const storageLayer = storage === "sqlite"
+    ? SqlitePlanStorageService
+    : pipe(JsonPlanStorageService, Layer.provide(BunContext.layer))
+
+  return pipe(
+    Layer.mergeAll(
+      DiskServiceFullLive,
+      pipe(
+        ScannerServiceLive,
+        Layer.provide(GlobServiceLive),
+        Layer.provide(FileStatServiceLive),
+        Layer.provide(BunContext.layer)
+      ),
+      BinPackServiceLive,
+      pipe(RsyncTransferService, Layer.provide(ShellServiceLive)),
+      storageLayer
+    )
   )
-)
+}
+
+// Default layer for backwards compatibility
+export const AppLive = createAppLayer("sqlite")

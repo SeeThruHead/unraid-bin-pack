@@ -143,7 +143,7 @@ export const dryRun = Options.boolean("dry-run").pipe(
 /**
  * Path to the plan file. Used to save (plan) or load (apply) the move plan.
  *
- * @default ~/.unraid-bin-pack/plan.json
+ * @default /mnt/user/appdata/unraid-bin-pack/plan.db (sqlite) or plan.json (json)
  */
 export const planFile = Options.file("plan-file").pipe(
   Options.withDescription("Path to plan file"),
@@ -157,6 +157,18 @@ export const planFile = Options.file("plan-file").pipe(
 export const force = Options.boolean("force").pipe(
   Options.withDescription("Overwrite existing plan without prompting"),
   Options.withDefault(false)
+)
+
+/**
+ * Storage backend for plan files.
+ * - json: Human-readable JSON files (default)
+ * - sqlite: SQLite database (atomic updates, better for large plans)
+ *
+ * @default "sqlite"
+ */
+export const storage = Options.choice("storage", ["json", "sqlite"]).pipe(
+  Options.withDescription("Storage backend: json or sqlite"),
+  Options.withDefault("sqlite" as const)
 )
 
 // =============================================================================
@@ -174,12 +186,14 @@ export interface PlanOptions {
   readonly folderThreshold: string         // parsed with parseFloat()
   readonly planFile: string | undefined
   readonly force: boolean                  // overwrite existing partial plan
+  readonly storage: "json" | "sqlite"
 }
 
 export interface ApplyOptions {
   readonly planFile: string | undefined
   readonly concurrency: number
   readonly dryRun: boolean
+  readonly storage: "json" | "sqlite"
 }
 
 // =============================================================================

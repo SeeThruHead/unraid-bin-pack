@@ -208,7 +208,7 @@ export const JsonPlanStorageService = Layer.effect(
   PlanStorageServiceTag,
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
-    const defaultPath = `${process.env.HOME}/.unraid-bin-pack/plan.json`
+    const defaultPath = `/mnt/user/appdata/unraid-bin-pack/plan.json`
 
     /** Transform filesystem errors to typed PlanStorageError */
     const toSaveError = (path: string, error: unknown): PlanStorageError =>

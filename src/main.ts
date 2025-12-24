@@ -19,7 +19,7 @@ import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Effect, Option } from "effect"
 
 import * as Opts from "./cli/options"
-import { runPlan, runApply, AppLive, withErrorHandling } from "./cli/handler"
+import { runPlan, runApply, createAppLayer, withErrorHandling } from "./cli/handler"
 
 // =============================================================================
 // Plan subcommand
@@ -38,6 +38,7 @@ const planCommand = Command.make(
     folderThreshold: Opts.folderThreshold,
     planFile: Opts.planFile,
     force: Opts.force,
+    storage: Opts.storage,
   },
   (opts) =>
     withErrorHandling(
@@ -52,8 +53,9 @@ const planCommand = Command.make(
         folderThreshold: opts.folderThreshold,
         planFile: Option.getOrUndefined(opts.planFile),
         force: opts.force,
+        storage: opts.storage,
       })
-    ).pipe(Effect.provide(AppLive))
+    ).pipe(Effect.provide(createAppLayer(opts.storage)))
 ).pipe(
   Command.withDescription(
     "Scan source disk and compute optimal move plan"
@@ -70,6 +72,7 @@ const applyCommand = Command.make(
     planFile: Opts.planFile,
     concurrency: Opts.concurrency,
     dryRun: Opts.dryRun,
+    storage: Opts.storage,
   },
   (opts) =>
     withErrorHandling(
@@ -77,8 +80,9 @@ const applyCommand = Command.make(
         planFile: Option.getOrUndefined(opts.planFile),
         concurrency: opts.concurrency,
         dryRun: opts.dryRun,
+        storage: opts.storage,
       })
-    ).pipe(Effect.provide(AppLive))
+    ).pipe(Effect.provide(createAppLayer(opts.storage)))
 ).pipe(
   Command.withDescription("Execute the saved move plan")
 )
