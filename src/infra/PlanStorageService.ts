@@ -2,7 +2,7 @@
  * PlanStorageService - persists move plans to disk for plan/apply workflow.
  */
 
-import { Context, Data, Effect, Layer, Match, pipe } from "effect"
+import { Context, Data, Effect, Layer, Match, pipe, Schema } from "effect"
 import { FileSystem } from "@effect/platform"
 import type { MovePlan, FileMove } from "../domain/MovePlan"
 
@@ -134,6 +134,37 @@ interface SerializedMove {
 }
 
 // =============================================================================
+// Schemas for validation
+// =============================================================================
+
+const MoveStatusSchema = Schema.Literal("pending", "in_progress", "completed", "skipped", "failed")
+
+const SerializedMoveSchema = Schema.Struct({
+  sourceRelPath: Schema.String,
+  sourceDisk: Schema.String,
+  targetDisk: Schema.String,
+  destAbsPath: Schema.String,
+  sizeBytes: Schema.Number,
+  status: MoveStatusSchema,
+  reason: Schema.optional(Schema.String),
+})
+
+const SerializedPlanSchema = Schema.Struct({
+  version: Schema.Literal(2),
+  createdAt: Schema.String,
+  spilloverDisk: Schema.String,
+  moves: Schema.Record({ key: Schema.String, value: SerializedMoveSchema }),
+})
+
+const decodePlan = Schema.decodeUnknown(SerializedPlanSchema)
+
+/** Format ParseError into a human-readable string */
+const formatParseError = (error: Schema.ParseError): string => {
+  const issue = error.issue
+  return Schema.TreeFormatter.formatIssueSync(issue)
+}
+
+// =============================================================================
 // Service interface
 // =============================================================================
 
@@ -238,22 +269,27 @@ export const JsonPlanStorageService = Layer.effect(
     const load: PlanStorageService["load"] = (path) =>
       pipe(
         fs.readFileString(path),
+        Effect.mapError((e) => toLoadError(path, e)),
         Effect.flatMap((content) =>
-          Effect.try({
-            try: () => JSON.parse(content) as SerializedPlan,
-            catch: (e) =>
-              new PlanParseError({ path, reason: e instanceof Error ? e.message : String(e) }),
-          })
-        ),
-        Effect.mapError((e) => {
-          // If it's already a PlanStorageError, pass through
-          if (e instanceof PlanNotFound || e instanceof PlanPermissionDenied ||
-              e instanceof PlanParseError || e instanceof PlanSaveFailed ||
-              e instanceof PlanLoadFailed) {
-            return e
-          }
-          return toLoadError(path, e)
-        })
+          pipe(
+            Effect.try({
+              try: () => JSON.parse(content),
+              catch: (e) =>
+                new PlanParseError({ path, reason: `Invalid JSON: ${e instanceof Error ? e.message : String(e)}` }),
+            }),
+            Effect.flatMap((json) =>
+              pipe(
+                decodePlan(json),
+                Effect.mapError((parseError) =>
+                  new PlanParseError({
+                    path,
+                    reason: `Schema validation failed: ${formatParseError(parseError)}`,
+                  })
+                )
+              )
+            )
+          )
+        )
       )
 
     const exists: PlanStorageService["exists"] = (path) =>
