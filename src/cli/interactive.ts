@@ -64,10 +64,35 @@ export const interactivePlanPrompts = (
       default: "1MB",
     })
 
+    // Discover common directories across disks
+    const commonDirs = yield* Effect.tryPromise({
+      try: async () => {
+        const dirsSet = new Set<string>()
+        for (const disk of discoveredDisks) {
+          try {
+            const entries = await Array.fromAsync(
+              new Bun.Glob("*").scan({ cwd: disk.path, onlyFiles: false })
+            )
+            for (const entry of entries) {
+              if (!entry.startsWith(".")) {
+                dirsSet.add(`/${entry}`)
+              }
+            }
+          } catch {
+            // Skip disks we can't read
+          }
+        }
+        return Array.from(dirsSet).sort()
+      },
+      catch: () => new Error("Failed to scan directories"),
+    }).pipe(Effect.orDie)
+
+    const pathFilterDefault = commonDirs.length > 0 ? commonDirs.join(",") : ""
+
     // Path filter
     const pathFilter = yield* Prompt.text({
-      message: "Path prefixes to include (comma-separated, empty for all)",
-      default: "/media/Movies,/media/TV,/media/Anime",
+      message: `Path prefixes to include (comma-separated, empty for all)${commonDirs.length > 0 ? ` [found: ${commonDirs.join(", ")}]` : ""}`,
+      default: pathFilterDefault,
     })
 
     // Include patterns
@@ -78,9 +103,9 @@ export const interactivePlanPrompts = (
 
     // Exclude patterns
     const exclude = yield* Prompt.text({
-      message: "Patterns to exclude (e.g., .DS_Store,@eaDir, empty for none)",
-      default: "",
-    }).pipe(Effect.map((s) => (s.trim() === "" ? undefined : s.trim())))
+      message: "Patterns to exclude",
+      default: ".DS_Store,@eaDir,.Trashes,.Spotlight-V100",
+    })
 
     // Min split size
     const minSplitSize = yield* Prompt.text({
@@ -96,9 +121,9 @@ export const interactivePlanPrompts = (
 
     // Plan file
     const planFile = yield* Prompt.text({
-      message: "Plan file path (empty for default)",
-      default: "",
-    }).pipe(Effect.map((s) => (s.trim() === "" ? undefined : s.trim())))
+      message: "Plan file path [/config/plan.db]",
+      default: "/config/plan.db",
+    }).pipe(Effect.map((s) => (s.trim() === "" || s.trim() === "/config/plan.db" ? undefined : s.trim())))
 
     // Force overwrite
     const force = yield* Prompt.confirm({
