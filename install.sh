@@ -12,24 +12,17 @@ echo "Unraid Bin-Pack Docker Wrapper Setup"
 echo "====================================="
 echo ""
 
-# Prompt for mount point
-read -p "Mount point for Unraid disks [/mnt]: " MOUNT_POINT
-MOUNT_POINT=${MOUNT_POINT:-/mnt}
+# Use sensible defaults
+MOUNT_POINT=/mnt
+CONFIG_DIR=/mnt/user/appdata/unraid-bin-pack
+IMAGE_TAG=latest
+OUTPUT_PATH=./unraid-bin-pack
 
-# Prompt for config directory
-read -p "Config directory for plan files [/mnt/user/appdata/unraid-bin-pack]: " CONFIG_DIR
-CONFIG_DIR=${CONFIG_DIR:-/mnt/user/appdata/unraid-bin-pack}
-
-# Prompt for Docker image tag
-read -p "Docker image tag [latest]: " IMAGE_TAG
-IMAGE_TAG=${IMAGE_TAG:-latest}
-
-# Prompt for output location
-read -p "Output script path [./unraid-bin-pack]: " OUTPUT_PATH
-OUTPUT_PATH=${OUTPUT_PATH:-./unraid-bin-pack}
-
+echo "Creating wrapper script with defaults..."
+echo "  Mount point: $MOUNT_POINT"
+echo "  Config dir:  $CONFIG_DIR"
+echo "  Image tag:   $IMAGE_TAG"
 echo ""
-echo "Generating wrapper script..."
 
 # Generate wrapper script
 cat > "$OUTPUT_PATH" << EOF
@@ -56,12 +49,15 @@ chmod +x "$OUTPUT_PATH"
 
 echo "✓ Wrapper script created: $OUTPUT_PATH"
 echo ""
+echo "Default configuration:"
+echo "  Disks:  $MOUNT_POINT"
+echo "  Config: $CONFIG_DIR"
+echo "  Image:  seethruhead/unraid-bin-pack:$IMAGE_TAG"
+echo ""
+echo "Edit $OUTPUT_PATH to customize mount points if needed."
+echo ""
 echo "Usage:"
 echo "  $OUTPUT_PATH plan --help"
 echo "  $OUTPUT_PATH plan --path-filter \"/Movies,/TV\""
 echo "  $OUTPUT_PATH apply"
-echo ""
-echo "Mount points:"
-echo "  Disks:  $MOUNT_POINT"
-echo "  Config: $CONFIG_DIR"
 echo ""
