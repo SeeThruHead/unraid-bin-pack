@@ -115,7 +115,7 @@ const matchDeleteError = (path: string) =>
 export const SqlitePlanStorageService = Layer.succeed(
   PlanStorageServiceTag,
   (() => {
-    const defaultPath = `/config/plan.db`
+    const defaultPath = `/config/plan.sh`
 
     const openDb = (path: string): Effect.Effect<Database, PlanStorageError> =>
       Effect.try({

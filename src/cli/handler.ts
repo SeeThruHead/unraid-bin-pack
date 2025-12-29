@@ -24,6 +24,7 @@ import { FileStatServiceLive } from "../infra/FileStatService"
 import { ShellServiceLive } from "../infra/ShellService"
 import { fromDomainError } from "./errors"
 import { interactivePlanPrompts } from "./interactive"
+import { PlanScriptGenerator } from "../services/PlanScriptGenerator"
 
 // =============================================================================
 // Helper: Move chain optimization
@@ -523,14 +524,33 @@ export const runPlan = (options: PlanOptions, isInteractive: boolean = false) =>
       )
     }
 
-    // Save plan
-    const primarySourceDisk = srcDiskPaths?.[0] ?? moves[0]?.file.diskPath ?? "auto"
-    yield* planStorage.save(plan, primarySourceDisk, diskStats, planPath)
-    yield* logger.plan.planSaved
+    // Generate bash script
+    const fs = yield* FileSystem.FileSystem
 
-    // Load and display the saved plan
-    const savedPlan = yield* planStorage.load(planPath)
-    yield* displayPlanDetails(savedPlan)
+    const primarySourceDisk = srcDiskPaths?.[0] ?? moves[0]?.file.diskPath ?? "auto"
+    const scriptContent = yield* PlanScriptGenerator.generate({
+      moves: plan.moves,
+      sourceDisk: primarySourceDisk,
+      diskStats,
+      concurrency: 4, // Default concurrency
+    })
+
+    // Write script to file (convert .db to .sh for backward compatibility)
+    const scriptPath = planPath.endsWith('.db') ? planPath.replace('.db', '.sh') : planPath
+    yield* fs.writeFileString(scriptPath, scriptContent)
+
+    // Make script executable (ignore errors in test/mock environment)
+    try {
+      await Bun.$`chmod +x ${scriptPath}`.quiet()
+    } catch {
+      // Ignore chmod errors - script still works with `bash script.sh`
+    }
+
+    yield* logger.plan.planSaved
+    yield* Console.log(`\n✓ Plan script saved to ${scriptPath}`)
+    yield* Console.log(`\nTo execute the plan:`)
+    yield* Console.log(`  ${scriptPath}`)
+    yield* Console.log(`  or: ./unraid-bin-pack apply\n`)
   })
 
 // =============================================================================
@@ -540,219 +560,47 @@ export const runPlan = (options: PlanOptions, isInteractive: boolean = false) =>
 export const runApply = (options: ApplyOptions) =>
   Effect.gen(function* () {
     const logger = yield* LoggerServiceTag
-    const planStorage = yield* PlanStorageServiceTag
-    const transferService = yield* TransferServiceTag
+    const fs = yield* FileSystem.FileSystem
 
-    const planPath = options.planFile ?? planStorage.defaultPath
+    // Determine script path
+    const defaultPath = "/config/plan.sh"
+    let scriptPath = options.planFile ?? defaultPath
+
+    // Convert .db paths to .sh for backward compatibility
+    if (scriptPath.endsWith('.db')) {
+      scriptPath = scriptPath.replace('.db', '.sh')
+    }
 
     yield* logger.apply.header(options.dryRun)
 
-    // Check if plan exists
-    const exists = yield* planStorage.exists(planPath)
-    if (!exists) {
-      yield* logger.apply.noPlanFound(planPath)
-      return
-    }
-
-    // Load plan
-    yield* logger.apply.loadingPlan(planPath)
-    const savedPlan = yield* planStorage.load(planPath)
-
-    // Get moves by status from Record structure
-    const allMoves = Object.entries(savedPlan.moves)
-    const pendingMoves = allMoves.filter(([_, m]) => m.status === "pending")
-    const failedMoves = allMoves.filter(([_, m]) => m.status === "failed")
-    const completedMoves = allMoves.filter(([_, m]) => m.status === "completed")
-    // Include both pending and failed moves for execution (retry support)
-    const movesToExecute = [...pendingMoves, ...failedMoves]
-    const totalBytes = movesToExecute.reduce((sum, [_, m]) => sum + m.sizeBytes, 0)
-
-    yield* logger.apply.planInfo({
-      createdAt: savedPlan.createdAt,
-      source: savedPlan.sourceDisk,
-      alreadyCompleted: completedMoves.length > 0 ? completedMoves.length : undefined,
-      retryingFailed: failedMoves.length > 0 ? failedMoves.length : undefined,
-      toTransfer: movesToExecute.length,
-      totalBytes,
-      pending: pendingMoves.length,
-      completed: completedMoves.length,
-      failed: failedMoves.length,
-    })
-
-    if (movesToExecute.length === 0) {
-      yield* logger.apply.noMovesRemaining
-      return
-    }
-
-    // =========================================================================
-    // Validate plan before execution
-    // =========================================================================
-
-    yield* logger.apply.validatingPlan
-    const fs = yield* FileSystem.FileSystem
-    const diskService = yield* DiskServiceTag
-
-    // 1. Check source files still exist
-    const missingFiles = yield* pipe(
-      Effect.forEach(movesToExecute, ([sourcePath, _]) =>
-        pipe(
-          fs.exists(sourcePath),
-          Effect.map((exists) => (exists ? null : sourcePath))
-        )
-      ),
-      Effect.map((results) => results.filter((p): p is string => p !== null))
+    // Check if plan script exists
+    const scriptExists = yield* pipe(
+      fs.access(scriptPath),
+      Effect.map(() => true),
+      Effect.catchAll(() => Effect.succeed(false))
     )
 
-    if (missingFiles.length > 0) {
-      yield* logger.apply.missingSourceFiles(missingFiles, missingFiles.length)
+    if (!scriptExists) {
+      yield* Console.log(`\n❌ No plan script found at ${scriptPath}`)
+      yield* Console.log(`   Run 'plan' command first.\n`)
       return
     }
-    yield* logger.apply.allSourceFilesExist(movesToExecute.length)
 
-    // 2. Check target disks have enough space
-    const bytesNeededPerDisk = movesToExecute.reduce((acc, [_, move]) => {
-      acc.set(move.targetDisk, (acc.get(move.targetDisk) ?? 0) + move.sizeBytes)
-      return acc
-    }, new Map<string, number>())
+    // Execute the plan script
+    yield* Console.log(`\n📂 Executing plan script: ${scriptPath}\n`)
 
-    const targetDiskPaths = [...bytesNeededPerDisk.keys()]
-
-    // Get current disk stats
-    const currentDiskStats = yield* diskService.discover(targetDiskPaths)
-    const currentDiskFreeMap = new Map(currentDiskStats.map((d) => [d.path, d.freeBytes]))
-
-    // Compare with saved stats and warn if different
-    const savedDiskStats = savedPlan.diskStats
-    const diskStatsChanged = targetDiskPaths.some((diskPath) => {
-      const saved = savedDiskStats[diskPath]?.freeBytes ?? 0
-      const current = currentDiskFreeMap.get(diskPath) ?? 0
-      const diffBytes = Math.abs(current - saved)
-      const diffPercent = saved > 0 ? (diffBytes / saved) * 100 : 0
-      return diffPercent > 5 // Warn if >5% difference
-    })
-
-    if (diskStatsChanged) {
-      yield* logger.apply.diskStatsChanged
-      const changes = targetDiskPaths
-        .map((diskPath) => {
-          const saved = savedDiskStats[diskPath]?.freeBytes ?? 0
-          const current = currentDiskFreeMap.get(diskPath) ?? 0
-          if (Math.abs(current - saved) / saved > 0.05) {
-            return { disk: diskPath, before: saved, after: current }
-          }
-          return null
-        })
-        .filter((c): c is { disk: string; before: number; after: number } => c !== null)
-
-      if (changes.length > 0) {
-        yield* logger.apply.diskStatsChangedWarning(changes)
-      }
-    }
-
-    // Check if current space is sufficient
-    const insufficientSpace = Array.from(bytesNeededPerDisk.entries())
-      .map(([diskPath, bytesNeeded]) => ({
-        disk: diskPath,
-        needed: bytesNeeded,
-        available: currentDiskFreeMap.get(diskPath) ?? 0,
-      }))
-      .filter(({ needed, available }) => needed > available)
-
-    if (insufficientSpace.length > 0) {
-      yield* logger.apply.insufficientSpace(insufficientSpace)
-      return
-    }
-    yield* logger.apply.sufficientSpace
-
-    // 3. Check for conflicts at destination
-    const conflicts = yield* pipe(
-      Effect.forEach(movesToExecute, ([_, move]) =>
-        pipe(
-          fs.exists(move.destAbsPath),
-          Effect.map((exists) => (exists ? move.destAbsPath : null))
-        )
-      ),
-      Effect.map((results) => results.filter((p): p is string => p !== null))
-    )
-
-    if (conflicts.length > 0) {
-      yield* logger.apply.conflicts(conflicts, conflicts.length)
-      return
-    }
-    yield* logger.apply.noConflicts
-
-    yield* logger.apply.planValidated
-
-    // Convert Record-based plan back to array for transfer service (only moves to execute)
-    const movesArray = movesToExecute.map(([sourceAbsPath, m]) => ({
-      file: {
-        absolutePath: sourceAbsPath,
-        relativePath: m.sourceRelPath,
-        sizeBytes: m.sizeBytes,
-        diskPath: m.sourceDisk,
-      },
-      targetDiskPath: m.targetDisk,
-      destinationPath: m.destAbsPath,
-      status: "pending" as const, // Reset failed to pending for retry
-      reason: m.reason,
-    }))
-
-    const plan = {
-      moves: movesArray,
-      summary: {
-        totalFiles: movesToExecute.length,
-        totalBytes,
-        movesPerDisk: new Map<string, number>(),
-        bytesPerDisk: new Map<string, number>(),
-      },
-    }
-
-    // Execute
     if (options.dryRun) {
-      yield* logger.apply.dryRunMode
-    } else {
-      yield* logger.apply.executing(movesToExecute.length, options.concurrency)
+      yield* Console.log(`🧪 DRY RUN MODE - showing what would be executed:\n`)
+      const scriptContent = yield* fs.readFileString(scriptPath)
+      yield* Console.log(scriptContent)
+      yield* Console.log(`\n✓ Dry run complete\n`)
+      return
     }
 
-    const report = yield* transferService.executeAll(plan, {
-      dryRun: options.dryRun,
-      concurrency: options.concurrency,
-      preserveAttrs: true,
-      deleteSource: true,
-      onProgress: (completed, total, move) => {
-        // Update database after each file transfer (for resume support)
-        if (!options.dryRun && move) {
-          Effect.gen(function* () {
-            // Add delay for testing resume feature
-            yield* Effect.sleep("2 seconds")
-            yield* planStorage.updateMoveStatus(planPath, move.file.absolutePath, "completed")
-          }).pipe(Effect.runPromise).catch(() => {
-            // Ignore errors in progress callback
-          })
-        }
-      },
-    })
+    // Execute the script
+    const result = yield* Effect.promise(() => Bun.$`bash ${scriptPath}`.quiet())
 
-    yield* logger.apply.transferComplete(options.dryRun)
-    yield* logger.apply.transferStats(report.successful, report.failed, report.skipped)
-
-    // Mark any failed moves in the database
-    if (!options.dryRun) {
-      yield* Effect.forEach(
-        report.results.filter(r => !r.success && r.error),
-        (result) =>
-          planStorage.updateMoveStatus(planPath, result.move.file.absolutePath, "failed", result.error),
-        { discard: true }
-      )
-
-      if (report.failed === 0) {
-        yield* logger.apply.allComplete
-        yield* planStorage.delete(planPath)
-        yield* logger.apply.planDeleted
-      } else {
-        yield* logger.apply.someFailedRetry
-      }
-    }
+    yield* Console.log(`\n✅ Plan execution complete!\n`)
   })
 
 // =============================================================================
