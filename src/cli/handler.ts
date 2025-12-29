@@ -23,6 +23,7 @@ import { GlobServiceLive } from "../infra/GlobService"
 import { FileStatServiceLive } from "../infra/FileStatService"
 import { ShellServiceLive } from "../infra/ShellService"
 import { fromDomainError } from "./errors"
+import { interactivePlanPrompts } from "./interactive"
 
 // =============================================================================
 // Helper: Move chain optimization
@@ -350,7 +351,7 @@ const displayPlanDetails = (
 // Plan command handler
 // =============================================================================
 
-export const runPlan = (options: PlanOptions) =>
+export const runPlan = (options: PlanOptions, isInteractive: boolean = false) =>
   Effect.gen(function* () {
     const diskService = yield* DiskServiceTag
     const scannerService = yield* ScannerServiceTag
@@ -358,19 +359,34 @@ export const runPlan = (options: PlanOptions) =>
     const transferService = yield* TransferServiceTag
     const logger = yield* LoggerServiceTag
 
+    // Interactive mode: discover disks first, then prompt for options
+    let finalOptions = options
+    if (isInteractive) {
+      const discoveredDisks = yield* diskService.autoDiscover().pipe(
+        Effect.flatMap(paths => diskService.discover(paths))
+      )
+
+      if (discoveredDisks.length === 0) {
+        yield* Console.error("\n❌ No disks found at /mnt/disk*\n")
+        return
+      }
+
+      finalOptions = yield* interactivePlanPrompts(discoveredDisks)
+    }
+
     // Set log level based on debug flag
-    if (options.debug) {
+    if (finalOptions.debug) {
       yield* Effect.logInfo("Debug logging enabled")
     }
 
-    const excludePatterns = options.exclude?.split(",").map((s) => s.trim()) ?? []
-    const _includePatterns = options.include?.split(",").map((s) => s.trim()) ?? []
-    const planPath = options.planFile ?? planStorage.defaultPath
+    const excludePatterns = finalOptions.exclude?.split(",").map((s) => s.trim()) ?? []
+    const _includePatterns = finalOptions.include?.split(",").map((s) => s.trim()) ?? []
+    const planPath = finalOptions.planFile ?? planStorage.defaultPath
 
     // Check for existing partial plan (conflict detection)
     const planExists = yield* planStorage.exists(planPath)
 
-    if (planExists && !options.force) {
+    if (planExists && !finalOptions.force) {
       // Try to load the plan
       const loadResult = yield* pipe(
         planStorage.load(planPath),
@@ -398,15 +414,15 @@ export const runPlan = (options: PlanOptions) =>
       }
     }
 
-    // Parse size options
-    const minSpaceBytes = parseSize(options.minSpace)
-    const minFileSizeBytes = parseSize(options.minFileSize)
-    const minSplitSizeBytes = parseSize(options.minSplitSize)
-    const moveAsFolderThresholdPct = parseFloat(options.moveAsFolderThreshold)
+    // Parse size options (provide defaults if not specified)
+    const minSpaceBytes = parseSize(finalOptions.minSpace ?? "50MB")
+    const minFileSizeBytes = parseSize(finalOptions.minFileSize ?? "1MB")
+    const minSplitSizeBytes = parseSize(finalOptions.minSplitSize ?? "1GB")
+    const moveAsFolderThresholdPct = parseFloat(finalOptions.moveAsFolderThreshold ?? "0.9")
 
     // Parse path filter (comma-separated list of path prefixes)
-    const pathPrefixes = options.pathFilter
-      ? options.pathFilter.split(",").map((s) => s.trim()).filter((s) => s.length > 0)
+    const pathPrefixes = finalOptions.pathFilter
+      ? finalOptions.pathFilter.split(",").map((s) => s.trim()).filter((s) => s.length > 0)
       : []
 
     yield* logger.plan.header
@@ -414,8 +430,8 @@ export const runPlan = (options: PlanOptions) =>
     // Step 1: Discover disks (auto-discover at /mnt/disk* if not specified)
     yield* logger.plan.discoveringDisks
 
-    const diskPaths = options.dest
-      ? options.dest.split(",").map((s) => s.trim())
+    const diskPaths = finalOptions.dest
+      ? finalOptions.dest.split(",").map((s) => s.trim())
       : yield* diskService.autoDiscover()
 
     if (diskPaths.length === 0) {
@@ -430,8 +446,8 @@ export const runPlan = (options: PlanOptions) =>
     })
 
     // Parse --src as comma-separated list if provided
-    const srcDiskPaths = options.src
-      ? options.src.split(",").map((s) => s.trim())
+    const srcDiskPaths = finalOptions.src
+      ? finalOptions.src.split(",").map((s) => s.trim())
       : undefined
 
     // Run backtracking evacuation with WorldView (single code path)
@@ -443,7 +459,7 @@ export const runPlan = (options: PlanOptions) =>
       minSplitSizeBytes,
       moveAsFolderThresholdPct,
       srcDiskPaths,
-      debug: options.debug,
+      debug: finalOptions.debug,
     })
 
     const { moves } = iterativeResult
@@ -500,7 +516,7 @@ export const runPlan = (options: PlanOptions) =>
     )
 
     // If --force and plan exists, delete it first
-    if (options.force && planExists) {
+    if (finalOptions.force && planExists) {
       yield* pipe(
         planStorage.delete(planPath),
         Effect.catchAll(() => Effect.void)
@@ -613,19 +629,21 @@ export const runApply = (options: ApplyOptions) =>
     })
 
     if (diskStatsChanged) {
-      yield* logger.apply.diskStatsChangedWarning
-      yield* Effect.forEach(
-        targetDiskPaths,
-        (diskPath) => {
+      yield* logger.apply.diskStatsChanged
+      const changes = targetDiskPaths
+        .map((diskPath) => {
           const saved = savedDiskStats[diskPath]?.freeBytes ?? 0
           const current = currentDiskFreeMap.get(diskPath) ?? 0
           if (Math.abs(current - saved) / saved > 0.05) {
-            return logger.apply.diskStatsChanged(diskPath, saved, current)
+            return { disk: diskPath, before: saved, after: current }
           }
-          return Effect.void
-        },
-        { discard: true }
-      )
+          return null
+        })
+        .filter((c): c is { disk: string; before: number; after: number } => c !== null)
+
+      if (changes.length > 0) {
+        yield* logger.apply.diskStatsChangedWarning(changes)
+      }
     }
 
     // Check if current space is sufficient

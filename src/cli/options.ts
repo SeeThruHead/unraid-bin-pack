@@ -40,12 +40,10 @@ export const dest = Options.text("dest").pipe(
  * Prevents filling destination disks completely.
  *
  * Accepts human-readable sizes: 50MB, 1GB, 500K, etc.
- *
- * @default "50MB"
  */
 export const minSpace = Options.text("min-space").pipe(
   Options.withDescription("Min free space to leave on each disk (e.g., 50MB, 1GB)"),
-  Options.withDefault("50MB")
+  Options.optional
 )
 
 /**
@@ -53,24 +51,20 @@ export const minSpace = Options.text("min-space").pipe(
  * Files smaller than this are ignored to avoid wasting effort on tiny files.
  *
  * Accepts human-readable sizes: 1MB, 500KB, etc.
- *
- * @default "1MB"
  */
 export const minFileSize = Options.text("min-file-size").pipe(
   Options.withDescription("Min file size to move (e.g., 1MB, 500KB)"),
-  Options.withDefault("1MB")
+  Options.optional
 )
 
 /**
  * Path prefixes to include (comma-separated).
  * Only files under these paths will be considered for consolidation.
  * Empty string means no filter (all paths).
- *
- * @default "/media/Movies,/media/TV,/media/Anime"
  */
 export const pathFilter = Options.text("path-filter").pipe(
   Options.withDescription("Path prefixes to include (e.g., '/media/Movies,/media/TV')"),
-  Options.withDefault("/media/Movies,/media/TV,/media/Anime")
+  Options.optional
 )
 
 /**
@@ -105,12 +99,10 @@ export const exclude = Options.text("exclude").pipe(
  * Keeps small projects/folders together on the same disk.
  *
  * Accepts human-readable sizes: 500MB, 1GB, etc.
- *
- * @default "1GB"
  */
 export const minSplitSize = Options.text("min-split-size").pipe(
   Options.withDescription("Folders smaller than this stay together (e.g., 1GB)"),
-  Options.withDefault("1GB")
+  Options.optional
 )
 
 /**
@@ -118,11 +110,10 @@ export const minSplitSize = Options.text("min-split-size").pipe(
  * the folder is treated as a unit (movie-like) and not split.
  *
  * @example 0.9 means if one file is 90%+ of the folder, keep together
- * @default 0.9
  */
 export const moveAsFolderThreshold = Options.text("move-as-folder-threshold").pipe(
   Options.withDescription("Keep folder together if largest file is this % of total (0.0-1.0)"),
-  Options.withDefault("0.9")
+  Options.optional
 )
 
 // =============================================================================
@@ -187,13 +178,13 @@ export const force = Options.boolean("force").pipe(
 export interface PlanOptions {
   readonly src: string | undefined         // auto-select least full if undefined
   readonly dest: string | undefined        // auto-discover if undefined
-  readonly minSpace: string                // parsed with parseSize()
-  readonly minFileSize: string             // parsed with parseSize()
-  readonly pathFilter: string              // comma-separated path prefixes
+  readonly minSpace: string | undefined    // parsed with parseSize()
+  readonly minFileSize: string | undefined // parsed with parseSize()
+  readonly pathFilter: string | undefined  // comma-separated path prefixes
   readonly include: string | undefined
   readonly exclude: string | undefined
-  readonly minSplitSize: string            // parsed with parseSize()
-  readonly moveAsFolderThreshold: string   // parsed with parseFloat()
+  readonly minSplitSize: string | undefined            // parsed with parseSize()
+  readonly moveAsFolderThreshold: string | undefined   // parsed with parseFloat()
   readonly planFile: string | undefined
   readonly force: boolean                  // overwrite existing partial plan
   readonly debug?: boolean                 // enable debug-level logging (optional)

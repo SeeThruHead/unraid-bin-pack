@@ -41,26 +41,44 @@ const planCommand = Command.make(
     force: Opts.force,
     debug: Opts.debug,
   },
-  (opts) =>
-    withErrorHandling(
+  (opts) => {
+    // Check if we should run interactive mode (no options provided)
+    const allOptionsEmpty =
+      Option.isNone(opts.src) &&
+      Option.isNone(opts.dest) &&
+      Option.isNone(opts.minSpace) &&
+      Option.isNone(opts.minFileSize) &&
+      Option.isNone(opts.pathFilter) &&
+      Option.isNone(opts.include) &&
+      Option.isNone(opts.exclude) &&
+      Option.isNone(opts.minSplitSize) &&
+      Option.isNone(opts.moveAsFolderThreshold) &&
+      Option.isNone(opts.planFile) &&
+      !opts.force &&
+      !opts.debug
+
+    const isInteractive = allOptionsEmpty && process.stdin.isTTY
+
+    return withErrorHandling(
       runPlan({
         src: Option.getOrUndefined(opts.src),
         dest: Option.getOrUndefined(opts.dest),
-        minSpace: opts.minSpace,
-        minFileSize: opts.minFileSize,
-        pathFilter: opts.pathFilter,
+        minSpace: Option.getOrUndefined(opts.minSpace),
+        minFileSize: Option.getOrUndefined(opts.minFileSize),
+        pathFilter: Option.getOrUndefined(opts.pathFilter),
         include: Option.getOrUndefined(opts.include),
         exclude: Option.getOrUndefined(opts.exclude),
-        minSplitSize: opts.minSplitSize,
-        moveAsFolderThreshold: opts.moveAsFolderThreshold,
+        minSplitSize: Option.getOrUndefined(opts.minSplitSize),
+        moveAsFolderThreshold: Option.getOrUndefined(opts.moveAsFolderThreshold),
         planFile: Option.getOrUndefined(opts.planFile),
         force: opts.force,
         debug: opts.debug,
-      })
+      }, isInteractive)
     ).pipe(
       opts.debug ? Effect.provide(Logger.minimumLogLevel(LogLevel.Debug)) : (x => x),
       Effect.provide(createAppLayer())
     )
+  }
 ).pipe(
   Command.withDescription(
     "Scan source disk and compute optimal move plan"
