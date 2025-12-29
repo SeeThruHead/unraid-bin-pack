@@ -719,29 +719,29 @@ export const runApply = (options: ApplyOptions) =>
       concurrency: options.concurrency,
       preserveAttrs: true,
       deleteSource: true,
-      onProgress: (_completed, _total, _move) => {
-        // Progress is logged by TerminalUI in real implementation
+      onProgress: (completed, total, move) => {
+        // Update database after each file transfer (for resume support)
+        if (!options.dryRun && move) {
+          Effect.gen(function* () {
+            // Add delay for testing resume feature
+            yield* Effect.sleep("2 seconds")
+            yield* planStorage.updateMoveStatus(planPath, move.file.absolutePath, "completed")
+          }).pipe(Effect.runPromise).catch(() => {
+            // Ignore errors in progress callback
+          })
+        }
       },
     })
 
     yield* logger.apply.transferComplete(options.dryRun)
     yield* logger.apply.transferStats(report.successful, report.failed, report.skipped)
 
-    // Persist progress to plan file (for resume support)
+    // Mark any failed moves in the database
     if (!options.dryRun) {
       yield* Effect.forEach(
-        report.results,
+        report.results.filter(r => !r.success && r.error),
         (result) =>
-          Effect.gen(function* () {
-            // Add delay for testing resume feature
-            yield* Effect.sleep("2 seconds")
-
-            if (result.success) {
-              return yield* planStorage.updateMoveStatus(planPath, result.move.file.absolutePath, "completed")
-            } else if (result.error) {
-              return yield* planStorage.updateMoveStatus(planPath, result.move.file.absolutePath, "failed", result.error)
-            }
-          }),
+          planStorage.updateMoveStatus(planPath, result.move.file.absolutePath, "failed", result.error),
         { discard: true }
       )
 
