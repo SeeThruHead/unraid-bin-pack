@@ -21,10 +21,10 @@ interface TreeSelectState {
 }
 
 /**
- * Scan directories up to 2 levels deep
+ * Scan directories up to 2 levels deep, merging paths across disks
  */
 async function scanDirectories(basePaths: string[]): Promise<TreeNode[]> {
-  const nodes: TreeNode[] = []
+  const nodeMap = new Map<string, TreeNode>()
 
   for (const basePath of basePaths) {
     try {
@@ -37,49 +37,66 @@ async function scanDirectories(basePaths: string[]): Promise<TreeNode[]> {
         if (entry.startsWith(".")) continue
 
         const fullPath = `${basePath}/${entry}`
-        const node: TreeNode = {
-          path: `/${entry}`,
-          name: entry,
-          expanded: false,
-          selected: false,
-          level: 0,
-          children: [],
+        const nodePath = `/${entry}`
+
+        // Get or create node for this directory
+        let node = nodeMap.get(nodePath)
+        if (!node) {
+          node = {
+            path: nodePath,
+            name: entry,
+            expanded: false,
+            selected: false,
+            level: 0,
+            children: [],
+          }
+          nodeMap.set(nodePath, node)
         }
 
-        // Level 2: subdirectories
+        // Level 2: subdirectories (merge children across disks)
         try {
           const subEntries = await Array.fromAsync(
             new Bun.Glob("*").scan({ cwd: fullPath, onlyFiles: false })
           )
 
+          const childrenMap = new Map<string, TreeNode>()
+          if (node.children) {
+            for (const child of node.children) {
+              childrenMap.set(child.name, child)
+            }
+          }
+
           for (const subEntry of subEntries) {
             if (subEntry.startsWith(".")) continue
 
-            node.children!.push({
-              path: `/${entry}/${subEntry}`,
-              name: subEntry,
-              expanded: false,
-              selected: false,
-              level: 1,
-            })
+            if (!childrenMap.has(subEntry)) {
+              childrenMap.set(subEntry, {
+                path: `/${entry}/${subEntry}`,
+                name: subEntry,
+                expanded: false,
+                selected: false,
+                level: 1,
+              })
+            }
           }
 
-          if (node.children!.length === 0) {
+          node.children = Array.from(childrenMap.values()).sort((a, b) =>
+            a.name.localeCompare(b.name)
+          )
+
+          if (node.children.length === 0) {
             delete node.children
           }
         } catch {
-          // Can't read subdirectories, skip
-          delete node.children
+          // Can't read subdirectories, keep existing children or none
         }
-
-        nodes.push(node)
       }
     } catch {
       // Can't read this base path, skip
     }
   }
 
-  return nodes.sort((a, b) => a.name.localeCompare(b.name))
+  return Array.from(nodeMap.values()).sort((a, b) => a.name.localeCompare(b.name))
 }
 
 /**
