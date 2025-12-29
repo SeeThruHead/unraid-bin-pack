@@ -81,7 +81,7 @@ Options:
   --path-filter <paths>          Path prefixes to include (default: /media/Movies,/media/TV,/media/Anime)
   --min-split-size <sz>          Min folder size to split (default: 1GB)
   --move-as-folder-threshold <n> Ratio for keeping folders together (default: 0.9)
-  --plan-file <path>             Where to save the plan (default: /mnt/user/appdata/unraid-bin-pack/plan.db)
+  --plan-file <path>             Where to save the plan script (default: /config/plan.sh)
   --include <patterns>           File patterns to include (e.g., '*.mkv,*.mp4')
   --exclude <patterns>           Patterns to exclude (e.g., '.DS_Store,@eaDir')
   --force                        Overwrite existing partial plan without prompting
@@ -90,26 +90,26 @@ Options:
 
 ### `apply` - Execute a saved plan
 
-Executes the move plan, transferring files using rsync.
+Executes the move plan script, transferring files using rsync.
 
 ```bash
 unraid-bin-pack apply [options]
 
 Options:
-  --plan-file <path>       Plan file to apply (default: /mnt/user/appdata/unraid-bin-pack/plan.db)
+  --plan-file <path>       Plan script to execute (default: /config/plan.sh)
   --dry-run                Show what would happen without moving files
   --concurrency <n>        Parallel transfers (default: 4)
 ```
 
 ### `show` - Display saved plan
 
-Shows the current plan details and disk states.
+Shows the current plan script.
 
 ```bash
 unraid-bin-pack show [options]
 
 Options:
-  --plan-file <path>       Plan file to display (default: /mnt/user/appdata/unraid-bin-pack/plan.db)
+  --plan-file <path>       Plan script to display (default: /config/plan.sh)
 ```
 
 ## Safety Features
@@ -227,20 +227,19 @@ export type DiskError = DiskNotFound | DiskPermissionDenied | DiskNotMountPoint
 
 This enables exhaustive error handling and user-friendly messages.
 
-#### Storage Backend
+#### Plan Scripts
 
-Plan storage uses SQLite via the `PlanStorageService` interface:
+Plans are generated as executable bash scripts using `PlanScriptGenerator`:
 
-| Backend | File | Features |
-|---------|------|----------|
-| `SqlitePlanStorageService` | `plan.db` | Atomic updates, concurrent-safe, efficient queries |
+| File | Format | Features |
+|------|--------|----------|
+| `plan.sh` | Bash script | Human-readable, rsync commands, idempotent, auditable |
 
-The service interface provides:
-- `save(plan, sourceDisk, diskStats, path)` - Create new plan
-- `load(path)` - Load existing plan
-- `exists(path)` - Check if plan exists
-- `updateMoveStatus(path, source, status, error?)` - Update individual move (atomic)
-- `delete(path)` - Remove plan after completion
+The script contains:
+- Metadata header (generated date, source disk, file counts)
+- Batched rsync commands (grouped by target disk)
+- Parallel execution with background processes (`&` and `wait`)
+- Automatic resume support (rsync is idempotent)
 
 ## Directory Structure
 

@@ -153,12 +153,12 @@ export const debug = Options.boolean("debug").pipe(
 // =============================================================================
 
 /**
- * Path to the plan file. Used to save (plan) or load (apply) the move plan.
+ * Path to the plan script. Used to save (plan) or execute (apply) the move plan.
  *
- * @default /mnt/user/appdata/unraid-bin-pack/plan.db (sqlite) or plan.json (json)
+ * @default /config/plan.sh
  */
 export const planFile = Options.file("plan-file").pipe(
-  Options.withDescription("Path to plan file"),
+  Options.withDescription("Path to plan script"),
   Options.optional
 )
 

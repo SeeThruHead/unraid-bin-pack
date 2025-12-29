@@ -104,9 +104,9 @@ export const interactivePlanPrompts = (
 
     // Plan file
     const planFile = yield* Prompt.text({
-      message: "Plan file path [/config/plan.db]",
-      default: "/config/plan.db",
-    }).pipe(Effect.map((s) => (s.trim() === "" || s.trim() === "/config/plan.db" ? undefined : s.trim())))
+      message: "Plan script path [/config/plan.sh]",
+      default: "/config/plan.sh",
+    }).pipe(Effect.map((s) => (s.trim() === "" || s.trim() === "/config/plan.sh" ? undefined : s.trim())))
 
     // Force overwrite
     const force = yield* Prompt.confirm({
