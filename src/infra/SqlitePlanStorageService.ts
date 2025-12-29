@@ -280,24 +280,27 @@ export const SqlitePlanStorageService = Layer.succeed(
       status,
       error
     ) =>
-      Effect.try({
-        try: () => {
-          const db = new Database(path)
-          const result = db.run(
-            "UPDATE moves SET status = ?, reason = COALESCE(?, reason) WHERE source_abs_path = ?",
-            [status, error ?? null, sourceAbsPath]
-          )
-          db.close()
+      openDb(path).pipe(
+        Effect.flatMap((db) =>
+          Effect.try({
+            try: () => {
+              const result = db.run(
+                "UPDATE moves SET status = ?, reason = COALESCE(?, reason) WHERE source_abs_path = ?",
+                [status, error ?? null, sourceAbsPath]
+              )
+              db.close()
 
-          if (result.changes === 0) {
-            throw new PlanLoadFailed({ path, reason: `Move not found: ${sourceAbsPath}` })
-          }
-        },
-        catch: (e) => {
-          if (e instanceof PlanLoadFailed) return e
-          return matchDeleteError(path)(detectErrorKind(e))
-        },
-      })
+              if (result.changes === 0) {
+                throw new PlanLoadFailed({ path, reason: `Move not found: ${sourceAbsPath}` })
+              }
+            },
+            catch: (e) => {
+              if (e instanceof PlanLoadFailed) return e
+              return matchDeleteError(path)(detectErrorKind(e))
+            },
+          })
+        )
+      )
 
     const deletePlan: PlanStorageService["delete"] = (path) =>
       Effect.try({

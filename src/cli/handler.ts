@@ -574,6 +574,9 @@ export const runApply = (options: ApplyOptions) =>
       retryingFailed: failedMoves.length > 0 ? failedMoves.length : undefined,
       toTransfer: movesToExecute.length,
       totalBytes,
+      pending: pendingMoves.length,
+      completed: completedMoves.length,
+      failed: failedMoves.length,
     })
 
     if (movesToExecute.length === 0) {
