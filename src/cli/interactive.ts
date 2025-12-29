@@ -8,6 +8,7 @@ import { Effect, Console } from "effect"
 import type { Terminal, QuitException } from "@effect/platform/Terminal"
 import type { PlanOptions } from "./options"
 import type { Disk } from "../domain/Disk"
+import { selectDirectoriesEffect } from "./treeSelect"
 
 /**
  * Run interactive prompts to gather plan options from user.
@@ -64,36 +65,18 @@ export const interactivePlanPrompts = (
       default: "1MB",
     })
 
-    // Discover common directories across disks
-    const commonDirs = yield* Effect.tryPromise({
-      try: async () => {
-        const dirsSet = new Set<string>()
-        for (const disk of discoveredDisks) {
-          try {
-            const entries = await Array.fromAsync(
-              new Bun.Glob("*").scan({ cwd: disk.path, onlyFiles: false })
-            )
-            for (const entry of entries) {
-              if (!entry.startsWith(".")) {
-                dirsSet.add(`/${entry}`)
-              }
-            }
-          } catch {
-            // Skip disks we can't read
-          }
-        }
-        return Array.from(dirsSet).sort()
-      },
-      catch: () => new Error("Failed to scan directories"),
-    }).pipe(Effect.orDie)
+    // Use tree-view to select directories
+    const selectedDirs = yield* selectDirectoriesEffect(
+      discoveredDisks.map((d) => d.path)
+    ).pipe(Effect.orDie)
 
-    const pathFilterDefault = commonDirs.length > 0 ? commonDirs.join(",") : ""
+    const pathFilter = selectedDirs.length > 0 ? selectedDirs.join(",") : ""
 
-    // Path filter
-    const pathFilter = yield* Prompt.text({
-      message: `Path prefixes to include (comma-separated, empty for all)${commonDirs.length > 0 ? ` [found: ${commonDirs.join(", ")}]` : ""}`,
-      default: pathFilterDefault,
-    })
+    if (selectedDirs.length > 0) {
+      yield* Console.log(`\n✓ Selected paths: ${selectedDirs.join(", ")}\n`)
+    } else {
+      yield* Console.log("\n✓ All paths included\n")
+    }
 
     // Include patterns
     const include = yield* Prompt.text({
