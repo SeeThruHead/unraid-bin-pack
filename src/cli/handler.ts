@@ -731,14 +731,17 @@ export const runApply = (options: ApplyOptions) =>
     if (!options.dryRun) {
       yield* Effect.forEach(
         report.results,
-        (result) => {
-          if (result.success) {
-            return planStorage.updateMoveStatus(planPath, result.move.file.absolutePath, "completed")
-          } else if (result.error) {
-            return planStorage.updateMoveStatus(planPath, result.move.file.absolutePath, "failed", result.error)
-          }
-          return Effect.void
-        },
+        (result) =>
+          Effect.gen(function* () {
+            // Add delay for testing resume feature
+            yield* Effect.sleep("2 seconds")
+
+            if (result.success) {
+              return yield* planStorage.updateMoveStatus(planPath, result.move.file.absolutePath, "completed")
+            } else if (result.error) {
+              return yield* planStorage.updateMoveStatus(planPath, result.move.file.absolutePath, "failed", result.error)
+            }
+          }),
         { discard: true }
       )
 
