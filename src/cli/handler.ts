@@ -2,23 +2,207 @@
  * CLI handlers - orchestrate services for plan and apply commands.
  */
 
-import { Effect, pipe, Layer } from "effect"
+import { Effect, Either, pipe, Layer, Logger, LogLevel } from "effect"
 import { Console } from "effect"
 import { BunContext } from "@effect/platform-bun"
 import { FileSystem } from "@effect/platform"
 
 import type { PlanOptions, ApplyOptions } from "./options"
 import { parseSize, formatSize } from "../lib/parseSize"
+import { createMovePlan, type FileMove } from "../domain/MovePlan"
+import type { WorldView } from "../domain/WorldView"
+import type { Disk } from "../domain/Disk"
+import { consolidateSimple } from "../services/SimpleConsolidator"
 import { DiskServiceTag, DiskServiceFullLive } from "../services/DiskService"
 import { ScannerServiceTag, ScannerServiceLive } from "../services/ScannerService"
-import { BinPackServiceTag, BinPackServiceLive } from "../services/BinPackService"
 import { TransferServiceTag, RsyncTransferService } from "../services/TransferService"
-import { PlanStorageServiceTag, JsonPlanStorageService } from "../infra/PlanStorageService"
+import { LoggerServiceTag, LoggerServiceLive } from "../services/LoggerService"
+import { PlanStorageServiceTag, type SerializedPlan } from "../infra/PlanStorageService"
 import { SqlitePlanStorageService } from "../infra/SqlitePlanStorageService"
 import { GlobServiceLive } from "../infra/GlobService"
 import { FileStatServiceLive } from "../infra/FileStatService"
 import { ShellServiceLive } from "../infra/ShellService"
 import { fromDomainError } from "./errors"
+
+// =============================================================================
+// Helper: Move chain optimization
+// =============================================================================
+
+/**
+ * Optimize move chains by consolidating A→B→C into A→C.
+ * Detects when a file is moved multiple times and consolidates to direct move.
+ * Filters out same-disk moves that would be created by incorrect consolidation.
+ */
+const optimizeMoveChains = (
+  moves: ReadonlyArray<FileMove>
+) => {
+  // Build a map of destination → source for each move
+  // This helps us detect when a destination in one move is a source in another
+  const destToSource = new Map<string, string>()
+  const sourceToDest = new Map<string, string>()
+
+  for (const move of moves) {
+    if (move.status === "pending") {
+      destToSource.set(move.destinationPath, move.file.absolutePath)
+      sourceToDest.set(move.file.absolutePath, move.destinationPath)
+    }
+  }
+
+  // Find chains: if destination of move A is source of move B, consolidate
+  const optimizedMoves = moves.map((move) => {
+    if (move.status !== "pending") return move
+
+    // Check if this move's source was a destination in a previous move
+    const originalSource = destToSource.get(move.file.absolutePath)
+
+    if (originalSource) {
+      // This is part of a chain! Consolidate: original → final destination
+      // Update the source to be the original, keep the final destination
+      // Also update diskPath to reflect the original source disk
+      const originalDiskPath = originalSource.match(/^(\/mnt\/disk\d+)/)?.[1] ?? move.file.diskPath
+
+      return {
+        ...move,
+        file: {
+          ...move.file,
+          absolutePath: originalSource,
+          diskPath: originalDiskPath,
+        },
+      }
+    }
+
+    return move
+  })
+
+  // Filter out intermediate moves and same-disk moves
+  const finalMoves = optimizedMoves.filter((move) => {
+    if (move.status !== "pending") return true
+
+    // Skip if destination is a source in another move (intermediate step)
+    if (sourceToDest.has(move.destinationPath)) return false
+
+    // Skip if source disk equals target disk (invalid consolidation)
+    const sourceDisk = move.file.diskPath
+    const targetDisk = move.targetDiskPath
+    if (sourceDisk === targetDisk) return false
+
+    return true
+  })
+
+  return finalMoves
+}
+
+// =============================================================================
+// Helper: Iterative disk emptying
+// =============================================================================
+
+/**
+ * Build a WorldView from disk stats and scan all disks for files.
+ * Then use backtracking evacuation to plan moves with consistent state.
+ */
+const buildWorldViewAndPlan = (
+  allDisks: Disk[],
+  options: {
+    excludePatterns: string[]
+    minSpaceBytes: number
+    minFileSizeBytes: number
+    pathPrefixes: string[]
+    minSplitSizeBytes: number
+    moveAsFolderThresholdPct: number
+    srcDiskPaths?: string[]
+    debug?: boolean
+  }
+) =>
+  Effect.gen(function* () {
+    const scannerService = yield* ScannerServiceTag
+
+    // Scan all disks to get all files
+    const allFiles = yield* Effect.flatMap(
+      Effect.forEach(allDisks, (disk) =>
+        scannerService.scanDisk(disk.path, {
+          excludePatterns: options.excludePatterns,
+        })
+      ),
+      (fileArrays) => Effect.succeed(fileArrays.flat())
+    )
+
+    // Debug: log file scan results
+    yield* Effect.forEach(allDisks, (disk) => {
+      const filesOnDisk = allFiles.filter(f => f.diskPath === disk.path)
+      const totalSize = filesOnDisk.reduce((sum, f) => sum + f.sizeBytes, 0)
+      return Effect.logDebug(`File scan: ${disk.path} - ${filesOnDisk.length} files, ${(totalSize / 1024 / 1024).toFixed(1)} MB`)
+    }, { discard: true })
+
+    // Build initial WorldView
+    // Include ALL disks - consolidator will handle min-space reservation
+    const initialWorldView: WorldView = {
+      disks: allDisks.map((disk) => ({
+        path: disk.path,
+        totalBytes: disk.totalBytes,
+        freeBytes: disk.freeBytes,
+      })),
+      files: allFiles,
+    }
+
+    // Debug: log WorldView state
+    yield* Effect.forEach(initialWorldView.disks, (disk) =>
+      Effect.logDebug(`WorldView: ${disk.path} - ${(disk.freeBytes / 1024 / 1024).toFixed(1)} MB free (will reserve ${(options.minSpaceBytes / 1024 / 1024).toFixed(1)} MB for min-space)`)
+    , { discard: true })
+
+    // Simple consolidation: work through disks from least full to most full
+    // Find best combinations of files that fill destination disks efficiently
+    const result = yield* consolidateSimple(
+      initialWorldView,
+      {
+        minSpaceBytes: options.minSpaceBytes,
+        minFileSizeBytes: options.minFileSizeBytes,
+        pathPrefixes: options.pathPrefixes,
+        srcDiskPaths: options.srcDiskPaths,
+      }
+    )
+
+    yield* Effect.logDebug(`Consolidation complete: ${result.moves.length} moves, ${(result.bytesConsolidated / 1024 / 1024).toFixed(1)} MB consolidated`)
+
+    // Optimize move chains to eliminate redundant intermediate moves
+    const optimizedMoves = optimizeMoveChains([...result.moves])
+
+    // Calculate final disk stats by applying moves to initial stats
+    const initialDiskStats = allDisks.map(d => ({
+      path: d.path,
+      totalBytes: d.totalBytes,
+      freeBytes: d.freeBytes,
+    }))
+
+    const diskFreeChanges = new Map<string, number>()
+    for (const move of optimizedMoves) {
+      const sourceDisk = move.file.diskPath
+      const targetDisk = move.targetDiskPath
+      // Source gains free space, target loses free space
+      diskFreeChanges.set(sourceDisk, (diskFreeChanges.get(sourceDisk) ?? 0) + move.file.sizeBytes)
+      diskFreeChanges.set(targetDisk, (diskFreeChanges.get(targetDisk) ?? 0) - move.file.sizeBytes)
+    }
+
+    const finalDiskStats = initialDiskStats.map(d => ({
+      ...d,
+      freeBytes: d.freeBytes + (diskFreeChanges.get(d.path) ?? 0),
+    }))
+
+    // Count how many disks were completely evacuated
+    const disksEvacuated = initialDiskStats.filter((initial) => {
+      const final = finalDiskStats.find((f) => f.path === initial.path)
+      if (!final) return false
+      const initialUsed = initial.totalBytes - initial.freeBytes
+      const finalUsed = final.totalBytes - final.freeBytes
+      return initialUsed > 0 && finalUsed === 0
+    }).length
+
+    return {
+      initialDiskStats,
+      finalDiskStats,
+      moves: optimizedMoves,
+      disksEvacuated,
+    }
+  })
 
 // =============================================================================
 // Error handling - convert all errors to human-readable messages
@@ -40,6 +224,127 @@ export const withErrorHandling = <A, R>(
     Effect.asVoid
   )
 
+// =============================================================================
+// Shared display functions
+// =============================================================================
+
+/**
+ * Display detailed plan summary with disk stats and move list.
+ * Used by both plan and show commands for consistent output.
+ * Shows ALL disks with before/after states.
+ */
+const displayPlanDetails = (
+  savedPlan: SerializedPlan
+) =>
+  Effect.gen(function* () {
+    const logger = yield* LoggerServiceTag
+    const diskService = yield* DiskServiceTag
+
+    // Get moves by status
+    const allMoves = Object.entries(savedPlan.moves)
+
+    // Extract source/target disks from moves
+    const getSourceDisk = (sourcePath: string) => {
+      const match = sourcePath.match(/^(\/mnt\/disk\d+)/)
+      return match?.[1] ?? sourcePath.split("/").slice(0, 3).join("/")
+    }
+
+    // Collect all unique disks (both source and destination)
+    const allDiskPaths = new Set<string>()
+    for (const [sourcePath, move] of allMoves as Array<[string, typeof savedPlan.moves[string]]>) {
+      allDiskPaths.add(getSourceDisk(sourcePath))
+      allDiskPaths.add(move.targetDisk)
+    }
+
+    // Get current disk stats for ALL disks
+    const diskStats = yield* diskService.discover([...allDiskPaths])
+    const diskStatsMap = new Map(diskStats.map((d) => [d.path, d]))
+
+    // Calculate bytes moving OUT of each disk (pending only)
+    const bytesMovingOut = new Map<string, number>()
+    // Calculate bytes moving IN to each disk (pending only)
+    const bytesMovingIn = new Map<string, number>()
+
+    for (const [sourcePath, move] of allMoves as Array<[string, typeof savedPlan.moves[string]]>) {
+      if (move.status === "pending") {
+        const sourceDisk = getSourceDisk(sourcePath)
+        const targetDisk = move.targetDisk
+
+        bytesMovingOut.set(sourceDisk, (bytesMovingOut.get(sourceDisk) ?? 0) + move.sizeBytes)
+        bytesMovingIn.set(targetDisk, (bytesMovingIn.get(targetDisk) ?? 0) + move.sizeBytes)
+      }
+    }
+
+    yield* logger.show.diskStatsHeader
+
+    // Show ALL disks with before/after states, sorted by path
+    const sortedDiskPaths = [...allDiskPaths].sort()
+    yield* Effect.forEach(
+      sortedDiskPaths,
+      (diskPath) =>
+        Effect.gen(function* () {
+          const stats = diskStatsMap.get(diskPath)
+          const movingOut = bytesMovingOut.get(diskPath) ?? 0
+          const movingIn = bytesMovingIn.get(diskPath) ?? 0
+          const netChange = movingIn - movingOut
+
+          if (stats) {
+            const freeAfter = stats.freeBytes - netChange
+            const usedPercent = ((stats.totalBytes - stats.freeBytes) / stats.totalBytes) * 100
+            const usedPercentAfter = ((stats.totalBytes - freeAfter) / stats.totalBytes) * 100
+
+            yield* logger.show.diskStats({
+              diskPath,
+              currentFree: stats.freeBytes,
+              totalBytes: stats.totalBytes,
+              usedPercent,
+              netChange,
+              freeAfter,
+              usedPercentAfter,
+            })
+          }
+        }),
+      { discard: true }
+    )
+
+    yield* logger.show.movePlanHeader
+
+    // Group moves by SOURCE disk for display
+    const movesBySourceDisk = (allMoves as Array<[string, typeof savedPlan.moves[string]]>).reduce((acc, [sourcePath, move]) => {
+      const sourceDisk = getSourceDisk(sourcePath)
+      if (!acc.has(sourceDisk)) {
+        acc.set(sourceDisk, [])
+      }
+      acc.get(sourceDisk)!.push({ sourcePath, move })
+      return acc
+    }, new Map<string, Array<{ sourcePath: string; move: typeof savedPlan.moves[string] }>>())
+
+    // Display moves grouped by SOURCE disk
+    yield* Effect.forEach(
+      Array.from(movesBySourceDisk.entries()),
+      ([sourceDisk, moves]) =>
+        Effect.gen(function* () {
+          const totalBytes = moves.reduce((sum, { move }) => sum + move.sizeBytes, 0)
+          yield* logger.show.targetDiskHeader(sourceDisk, moves.length, totalBytes)
+
+          yield* Effect.forEach(
+            moves,
+            ({ sourcePath, move }) => {
+              return logger.show.moveEntry({
+                status: move.status as "pending" | "completed" | "failed",
+                size: move.sizeBytes,
+                sourcePath,
+                destPath: move.destAbsPath,
+              })
+            },
+            { discard: true }
+          )
+        }),
+      { discard: true }
+    )
+
+    yield* logger.show.separator
+  })
 
 // =============================================================================
 // Plan command handler
@@ -49,161 +354,167 @@ export const runPlan = (options: PlanOptions) =>
   Effect.gen(function* () {
     const diskService = yield* DiskServiceTag
     const scannerService = yield* ScannerServiceTag
-    const binPackService = yield* BinPackServiceTag
     const planStorage = yield* PlanStorageServiceTag
     const transferService = yield* TransferServiceTag
+    const logger = yield* LoggerServiceTag
+
+    // Set log level based on debug flag
+    if (options.debug) {
+      yield* Effect.logInfo("Debug logging enabled")
+    }
 
     const excludePatterns = options.exclude?.split(",").map((s) => s.trim()) ?? []
     const _includePatterns = options.include?.split(",").map((s) => s.trim()) ?? []
     const planPath = options.planFile ?? planStorage.defaultPath
 
     // Check for existing partial plan (conflict detection)
-    const existingPlan = yield* pipe(
-      planStorage.load(planPath),
-      Effect.map((plan) => plan as typeof plan | null),
-      Effect.catchAll(() => Effect.succeed(null))
-    )
+    const planExists = yield* planStorage.exists(planPath)
 
-    if (existingPlan && !options.force) {
+    if (planExists && !options.force) {
+      // Try to load the plan
+      const loadResult = yield* pipe(
+        planStorage.load(planPath),
+        Effect.either
+      )
+
+      if (Either.isLeft(loadResult)) {
+        // Plan exists but can't be loaded (incompatible schema, corrupt, etc.)
+        yield* Console.error(`\nERROR: An existing plan file at "${planPath}" cannot be loaded.`)
+        yield* Console.error(`   This may be an old or incompatible plan format.`)
+        yield* Console.error(`\n   Use --force to overwrite it with a new plan.`)
+        return
+      }
+
+      // Plan loaded successfully - check if it has progress
+      const existingPlan = loadResult.right
       const moves = Object.values(existingPlan.moves)
       const completed = moves.filter((m) => m.status === "completed").length
       const failed = moves.filter((m) => m.status === "failed").length
       const pending = moves.filter((m) => m.status === "pending").length
 
       if (completed > 0 || failed > 0) {
-        yield* Console.error(`\nWARNING: Existing plan found with partial progress:`)
-        yield* Console.error(`   Completed: ${completed}`)
-        yield* Console.error(`   Failed: ${failed}`)
-        yield* Console.error(`   Pending: ${pending}`)
-        yield* Console.error(`\n   To continue the existing plan: unraid-bin-pack apply`)
-        yield* Console.error(`   To overwrite with a new plan:  unraid-bin-pack plan --force`)
+        yield* logger.plan.existingPlanWarning({ completed, failed, pending })
         return
       }
     }
 
     // Parse size options
-    const thresholdBytes = parseSize(options.threshold)
+    const minSpaceBytes = parseSize(options.minSpace)
+    const minFileSizeBytes = parseSize(options.minFileSize)
     const minSplitSizeBytes = parseSize(options.minSplitSize)
-    const folderThresholdPct = parseFloat(options.folderThreshold)
+    const moveAsFolderThresholdPct = parseFloat(options.moveAsFolderThreshold)
 
-    yield* Console.log(`\nUnraid Bin-Pack - Planning`)
-    yield* Console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+    // Parse path filter (comma-separated list of path prefixes)
+    const pathPrefixes = options.pathFilter
+      ? options.pathFilter.split(",").map((s) => s.trim()).filter((s) => s.length > 0)
+      : []
+
+    yield* logger.plan.header
 
     // Step 1: Discover disks (auto-discover at /mnt/disk* if not specified)
-    yield* Console.log(`\nDiscovering disks...`)
+    yield* logger.plan.discoveringDisks
 
     const diskPaths = options.dest
       ? options.dest.split(",").map((s) => s.trim())
       : yield* diskService.autoDiscover()
 
     if (diskPaths.length === 0) {
-      yield* Console.error(`\nERROR: No disks found. Specify --dest or ensure disks exist at /mnt/disk*`)
+      yield* logger.plan.noDisksFound
       return
     }
 
     const allDisks = yield* diskService.discover(diskPaths)
 
-    // Step 2: Determine source disk (auto-select least full if not specified)
-    const srcDiskPath = options.src ?? (() => {
-      // Find disk with most free space (least full)
-      const sorted = [...allDisks].sort((a, b) => b.freeBytes - a.freeBytes)
-      return sorted[0]?.path
-    })()
-
-    if (!srcDiskPath) {
-      yield* Console.error(`\nERROR: Could not determine source disk`)
-      return
-    }
-
-    yield* Effect.forEach(allDisks, (disk) => {
-      const usedPct = ((disk.totalBytes - disk.freeBytes) / disk.totalBytes * 100).toFixed(1)
-      const isSrc = disk.path === srcDiskPath ? " (source)" : ""
-      return Console.log(`   ${disk.path}: ${formatSize(disk.freeBytes)} free (${usedPct}% used)${isSrc}`)
-    }, { discard: true })
-
-    // Validate source disk
-    const srcDisk = allDisks.find((d) => d.path === srcDiskPath)
-    if (!srcDisk) {
-      yield* Console.error(`\nERROR: Source disk not found: ${srcDiskPath}`)
-      yield* Console.error(`   Available: ${allDisks.map((d) => d.path).join(", ")}`)
-      return
-    }
-
-    const destDisks = allDisks.filter((d) => d.path !== srcDiskPath)
-    if (destDisks.length === 0) {
-      yield* Console.error(`\nERROR: No destination disks available`)
-      return
-    }
-
-    // Log parsed options
-    yield* Console.log(`\n   Source: ${srcDiskPath}`)
-    yield* Console.log(`   Destinations: ${destDisks.map(d => d.path).join(", ")}`)
-    yield* Console.log(`   Threshold: ${formatSize(thresholdBytes)}`)
-    yield* Console.log(`   Min split size: ${formatSize(minSplitSizeBytes)}`)
-    yield* Console.log(`   Folder threshold: ${(folderThresholdPct * 100).toFixed(0)}%`)
-
-    // Step 3: Scan source disk
-    yield* Console.log(`\nScanning source disk: ${srcDiskPath}...`)
-    const srcFiles = yield* scannerService.scanDisk(srcDiskPath, { excludePatterns })
-    yield* Console.log(`   Found ${srcFiles.length} files`)
-
-    if (srcFiles.length === 0) {
-      yield* Console.log(`\nNo files on source disk. Already optimized!`)
-      return
-    }
-
-    // Step 4: Compute moves
-    yield* Console.log(`\nComputing optimal placement (${options.algorithm})...`)
-    const result = yield* binPackService.computeMoves(destDisks, srcFiles, {
-      thresholdBytes,
-      algorithm: options.algorithm,
-      minSplitSizeBytes: minSplitSizeBytes,
-      folderThreshold: folderThresholdPct,
+    yield* Effect.forEach(allDisks, (disk) => logger.plan.diskInfo(disk, false), {
+      discard: true,
     })
 
-    const { plan, placedFolders, explodedFolders } = result
-    const pendingMoves = plan.moves.filter((m) => m.status === "pending")
-    const skippedMoves = plan.moves.filter((m) => m.status === "skipped")
+    // Parse --src as comma-separated list if provided
+    const srcDiskPaths = options.src
+      ? options.src.split(",").map((s) => s.trim())
+      : undefined
 
-    yield* Console.log(`\n   Folders placed as-is: ${placedFolders.length}`)
-    if (explodedFolders.length > 0) {
-      yield* Console.log(`   Folders split: ${explodedFolders.length}`)
-    }
-    yield* Console.log(`   Moves planned: ${pendingMoves.length}`)
-    yield* Console.log(`   Skipped: ${skippedMoves.length}`)
-    yield* Console.log(`   Total: ${formatSize(plan.summary.totalBytes)}`)
+    // Run backtracking evacuation with WorldView (single code path)
+    const iterativeResult = yield* buildWorldViewAndPlan(allDisks, {
+      excludePatterns,
+      minSpaceBytes,
+      minFileSizeBytes,
+      pathPrefixes,
+      minSplitSizeBytes,
+      moveAsFolderThresholdPct,
+      srcDiskPaths,
+      debug: options.debug,
+    })
 
-    if (pendingMoves.length === 0) {
-      yield* Console.log(`\nNo moves needed!`)
+    const { moves } = iterativeResult
+    const pendingMoves = moves.filter((m) => m.status === "pending")
+    const skippedMoves = moves.filter((m) => m.status === "skipped")
+
+    if (moves.length === 0) {
+      yield* logger.plan.noMovesNeeded
       return
     }
 
-    // Step 5: Validate with rsync --dry-run
-    yield* Console.log(`\nValidating with rsync --dry-run...`)
+    // Create plan from accumulated moves
+    const plan = createMovePlan(moves)
+
+    yield* logger.plan.planStats({
+      foldersPlaced: 0, // TODO: Track folder stats in WorldView
+      foldersExploded: undefined,
+      movesPlanned: pendingMoves.length,
+      skipped: skippedMoves.length,
+      totalBytes: plan.summary.totalBytes,
+    })
+
+    if (pendingMoves.length === 0) {
+      yield* logger.plan.noMovesNeeded
+      return
+    }
+
+    // Validate with rsync --dry-run
+    yield* logger.plan.validating
     const dryRunReport = yield* transferService.executeAll(plan, {
       dryRun: true,
       concurrency: 1,
       preserveAttrs: true,
       deleteSource: true,
     })
-    yield* Console.log(`   ${dryRunReport.successful} moves validated`)
+    yield* logger.plan.validationComplete(dryRunReport.successful)
 
-    // Step 6: Save plan
-    yield* Console.log(`\nSaving plan to: ${planPath}`)
-    yield* planStorage.save(plan, srcDiskPath, planPath)
+    // Save plan
+    yield* logger.plan.savingPlan(planPath)
 
-    // Show summary
-    yield* Console.log(`\nMove summary by target disk:`)
-    yield* Effect.forEach(
-      Array.from(plan.summary.movesPerDisk.entries()),
-      ([diskPath, count]) => {
-        const bytes = plan.summary.bytesPerDisk.get(diskPath) ?? 0
-        return Console.log(`   ${diskPath}: ${count} files (${formatSize(bytes)})`)
-      },
-      { discard: true }
+    // Compute disk stats - include all destination disks
+    const allDestDiskPaths = new Set(moves.map((m) => m.targetDiskPath))
+    const diskStats = Object.fromEntries(
+      allDisks
+        .filter((disk) => allDestDiskPaths.has(disk.path))
+        .map((disk) => [
+          disk.path,
+          {
+            totalBytes: disk.totalBytes,
+            freeBytes: disk.freeBytes,
+            bytesToMove: plan.summary.bytesPerDisk.get(disk.path) ?? 0,
+          },
+        ])
     )
 
-    yield* Console.log(`\nPlan saved! Run 'unraid-bin-pack apply' to execute.`)
+    // If --force and plan exists, delete it first
+    if (options.force && planExists) {
+      yield* pipe(
+        planStorage.delete(planPath),
+        Effect.catchAll(() => Effect.void)
+      )
+    }
+
+    // Save plan
+    const primarySourceDisk = srcDiskPaths?.[0] ?? moves[0]?.file.diskPath ?? "auto"
+    yield* planStorage.save(plan, primarySourceDisk, diskStats, planPath)
+    yield* logger.plan.planSaved
+
+    // Load and display the saved plan
+    const savedPlan = yield* planStorage.load(planPath)
+    yield* displayPlanDetails(savedPlan)
   })
 
 // =============================================================================
@@ -212,24 +523,23 @@ export const runPlan = (options: PlanOptions) =>
 
 export const runApply = (options: ApplyOptions) =>
   Effect.gen(function* () {
+    const logger = yield* LoggerServiceTag
     const planStorage = yield* PlanStorageServiceTag
     const transferService = yield* TransferServiceTag
 
     const planPath = options.planFile ?? planStorage.defaultPath
 
-    yield* Console.log(`\nUnraid Bin-Pack - Apply${options.dryRun ? " (DRY RUN)" : ""}`)
-    yield* Console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+    yield* logger.apply.header(options.dryRun)
 
     // Check if plan exists
     const exists = yield* planStorage.exists(planPath)
     if (!exists) {
-      yield* Console.error(`\nERROR: No plan found at: ${planPath}`)
-      yield* Console.error(`   Run 'unraid-bin-pack plan' first.`)
+      yield* logger.apply.noPlanFound(planPath)
       return
     }
 
     // Load plan
-    yield* Console.log(`\nLoading plan from: ${planPath}`)
+    yield* logger.apply.loadingPlan(planPath)
     const savedPlan = yield* planStorage.load(planPath)
 
     // Get moves by status from Record structure
@@ -241,18 +551,17 @@ export const runApply = (options: ApplyOptions) =>
     const movesToExecute = [...pendingMoves, ...failedMoves]
     const totalBytes = movesToExecute.reduce((sum, [_, m]) => sum + m.sizeBytes, 0)
 
-    yield* Console.log(`   Created: ${savedPlan.createdAt}`)
-    yield* Console.log(`   Source: ${savedPlan.spilloverDisk}`)
-    if (completedMoves.length > 0) {
-      yield* Console.log(`   Already completed: ${completedMoves.length}`)
-    }
-    if (failedMoves.length > 0) {
-      yield* Console.log(`   Retrying failed: ${failedMoves.length}`)
-    }
-    yield* Console.log(`   To transfer: ${movesToExecute.length} (${formatSize(totalBytes)})`)
+    yield* logger.apply.planInfo({
+      createdAt: savedPlan.createdAt,
+      source: savedPlan.sourceDisk,
+      alreadyCompleted: completedMoves.length > 0 ? completedMoves.length : undefined,
+      retryingFailed: failedMoves.length > 0 ? failedMoves.length : undefined,
+      toTransfer: movesToExecute.length,
+      totalBytes,
+    })
 
     if (movesToExecute.length === 0) {
-      yield* Console.log(`\nNo moves remaining in plan!`)
+      yield* logger.apply.noMovesRemaining
       return
     }
 
@@ -260,7 +569,7 @@ export const runApply = (options: ApplyOptions) =>
     // Validate plan before execution
     // =========================================================================
 
-    yield* Console.log(`\nValidating plan...`)
+    yield* logger.apply.validatingPlan
     const fs = yield* FileSystem.FileSystem
     const diskService = yield* DiskServiceTag
 
@@ -276,17 +585,10 @@ export const runApply = (options: ApplyOptions) =>
     )
 
     if (missingFiles.length > 0) {
-      yield* Console.error(`\nERROR: Validation failed: ${missingFiles.length} source files no longer exist`)
-      yield* Effect.forEach(missingFiles.slice(0, 5), (path) =>
-        Console.error(`   - ${path}`)
-      , { discard: true })
-      if (missingFiles.length > 5) {
-        yield* Console.error(`   ... and ${missingFiles.length - 5} more`)
-      }
-      yield* Console.error(`\n   Re-run 'unraid-bin-pack plan' to generate a fresh plan.`)
+      yield* logger.apply.missingSourceFiles(missingFiles, missingFiles.length)
       return
     }
-    yield* Console.log(`   All ${movesToExecute.length} source files exist`)
+    yield* logger.apply.allSourceFilesExist(movesToExecute.length)
 
     // 2. Check target disks have enough space
     const bytesNeededPerDisk = movesToExecute.reduce((acc, [_, move]) => {
@@ -295,26 +597,51 @@ export const runApply = (options: ApplyOptions) =>
     }, new Map<string, number>())
 
     const targetDiskPaths = [...bytesNeededPerDisk.keys()]
-    const diskStats = yield* diskService.discover(targetDiskPaths)
-    const diskFreeMap = new Map(diskStats.map((d) => [d.path, d.freeBytes]))
 
+    // Get current disk stats
+    const currentDiskStats = yield* diskService.discover(targetDiskPaths)
+    const currentDiskFreeMap = new Map(currentDiskStats.map((d) => [d.path, d.freeBytes]))
+
+    // Compare with saved stats and warn if different
+    const savedDiskStats = savedPlan.diskStats
+    const diskStatsChanged = targetDiskPaths.some((diskPath) => {
+      const saved = savedDiskStats[diskPath]?.freeBytes ?? 0
+      const current = currentDiskFreeMap.get(diskPath) ?? 0
+      const diffBytes = Math.abs(current - saved)
+      const diffPercent = saved > 0 ? (diffBytes / saved) * 100 : 0
+      return diffPercent > 5 // Warn if >5% difference
+    })
+
+    if (diskStatsChanged) {
+      yield* logger.apply.diskStatsChangedWarning
+      yield* Effect.forEach(
+        targetDiskPaths,
+        (diskPath) => {
+          const saved = savedDiskStats[diskPath]?.freeBytes ?? 0
+          const current = currentDiskFreeMap.get(diskPath) ?? 0
+          if (Math.abs(current - saved) / saved > 0.05) {
+            return logger.apply.diskStatsChanged(diskPath, saved, current)
+          }
+          return Effect.void
+        },
+        { discard: true }
+      )
+    }
+
+    // Check if current space is sufficient
     const insufficientSpace = Array.from(bytesNeededPerDisk.entries())
       .map(([diskPath, bytesNeeded]) => ({
         disk: diskPath,
         needed: bytesNeeded,
-        available: diskFreeMap.get(diskPath) ?? 0,
+        available: currentDiskFreeMap.get(diskPath) ?? 0,
       }))
       .filter(({ needed, available }) => needed > available)
 
     if (insufficientSpace.length > 0) {
-      yield* Console.error(`\nERROR: Validation failed: Insufficient space on target disks`)
-      yield* Effect.forEach(insufficientSpace, ({ disk, needed, available }) =>
-        Console.error(`   ${disk}: needs ${formatSize(needed)}, has ${formatSize(available)}`)
-      , { discard: true })
-      yield* Console.error(`\n   Re-run 'unraid-bin-pack plan' to generate a fresh plan.`)
+      yield* logger.apply.insufficientSpace(insufficientSpace)
       return
     }
-    yield* Console.log(`   Target disks have sufficient space`)
+    yield* logger.apply.sufficientSpace
 
     // 3. Check for conflicts at destination
     const conflicts = yield* pipe(
@@ -328,19 +655,12 @@ export const runApply = (options: ApplyOptions) =>
     )
 
     if (conflicts.length > 0) {
-      yield* Console.error(`\nERROR: Validation failed: ${conflicts.length} destination paths already exist`)
-      yield* Effect.forEach(conflicts.slice(0, 5), (path) =>
-        Console.error(`   - ${path}`)
-      , { discard: true })
-      if (conflicts.length > 5) {
-        yield* Console.error(`   ... and ${conflicts.length - 5} more`)
-      }
-      yield* Console.error(`\n   Re-run 'unraid-bin-pack plan' to generate a fresh plan.`)
+      yield* logger.apply.conflicts(conflicts, conflicts.length)
       return
     }
-    yield* Console.log(`   No conflicts at destinations`)
+    yield* logger.apply.noConflicts
 
-    yield* Console.log(`   Plan validated successfully`)
+    yield* logger.apply.planValidated
 
     // Convert Record-based plan back to array for transfer service (only moves to execute)
     const movesArray = movesToExecute.map(([sourceAbsPath, m]) => ({
@@ -368,9 +688,9 @@ export const runApply = (options: ApplyOptions) =>
 
     // Execute
     if (options.dryRun) {
-      yield* Console.log(`\nDry run - showing what would be transferred...`)
+      yield* logger.apply.dryRunMode
     } else {
-      yield* Console.log(`\nExecuting ${movesToExecute.length} transfers (concurrency: ${options.concurrency})...`)
+      yield* logger.apply.executing(movesToExecute.length, options.concurrency)
     }
 
     const report = yield* transferService.executeAll(plan, {
@@ -383,10 +703,8 @@ export const runApply = (options: ApplyOptions) =>
       },
     })
 
-    yield* Console.log(`\n${options.dryRun ? "Dry run" : "Transfer"} complete:`)
-    yield* Console.log(`   Successful: ${report.successful}`)
-    yield* Console.log(`   Failed: ${report.failed}`)
-    yield* Console.log(`   Skipped: ${report.skipped}`)
+    yield* logger.apply.transferComplete(options.dryRun)
+    yield* logger.apply.transferStats(report.successful, report.failed, report.skipped)
 
     // Persist progress to plan file (for resume support)
     if (!options.dryRun) {
@@ -404,26 +722,67 @@ export const runApply = (options: ApplyOptions) =>
       )
 
       if (report.failed === 0) {
-        yield* Console.log(`\nAll transfers complete!`)
+        yield* logger.apply.allComplete
         yield* planStorage.delete(planPath)
-        yield* Console.log(`   Plan file cleaned up.`)
+        yield* logger.apply.planDeleted
       } else {
-        yield* Console.log(`\nWARNING: Some transfers failed. Run 'unraid-bin-pack apply' again to retry.`)
+        yield* logger.apply.someFailedRetry
       }
     }
+  })
+
+// =============================================================================
+// Show command handler
+// =============================================================================
+
+export const runShow = (options: { planFile: string | undefined }) =>
+  Effect.gen(function* () {
+    const logger = yield* LoggerServiceTag
+    const planStorage = yield* PlanStorageServiceTag
+    const diskService = yield* DiskServiceTag
+
+    const planPath = options.planFile ?? planStorage.defaultPath
+
+    yield* logger.show.header
+
+    // Check if plan exists
+    const exists = yield* planStorage.exists(planPath)
+    if (!exists) {
+      yield* logger.show.noPlanFound(planPath)
+      return
+    }
+
+    // Load plan
+    yield* logger.show.loadingPlan(planPath)
+    const savedPlan = yield* planStorage.load(planPath)
+
+    // Get moves by status
+    const allMoves = Object.entries(savedPlan.moves)
+    const pendingMoves = allMoves.filter(([_, m]) => m.status === "pending")
+    const completedMoves = allMoves.filter(([_, m]) => m.status === "completed")
+    const failedMoves = allMoves.filter(([_, m]) => m.status === "failed")
+
+    yield* logger.show.planInfo({
+      createdAt: savedPlan.createdAt,
+      source: savedPlan.sourceDisk,
+      totalMoves: allMoves.length,
+      pending: pendingMoves.length,
+      completed: completedMoves.length,
+      failed: failedMoves.length,
+    })
+
+    // Display detailed plan summary (reuses same display logic as plan command)
+    yield* displayPlanDetails(savedPlan)
   })
 
 // =============================================================================
 // Full live layer
 // =============================================================================
 
-export const createAppLayer = (storage: "json" | "sqlite") => {
-  const storageLayer = storage === "sqlite"
-    ? SqlitePlanStorageService
-    : pipe(JsonPlanStorageService, Layer.provide(BunContext.layer))
-
+export const createAppLayer = () => {
   return pipe(
     Layer.mergeAll(
+      LoggerServiceLive,
       DiskServiceFullLive,
       pipe(
         ScannerServiceLive,
@@ -431,12 +790,11 @@ export const createAppLayer = (storage: "json" | "sqlite") => {
         Layer.provide(FileStatServiceLive),
         Layer.provide(BunContext.layer)
       ),
-      BinPackServiceLive,
       pipe(RsyncTransferService, Layer.provide(ShellServiceLive)),
-      storageLayer
+      SqlitePlanStorageService
     )
   )
 }
 
 // Default layer for backwards compatibility
-export const AppLive = createAppLayer("sqlite")
+export const AppLive = createAppLayer()

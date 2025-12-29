@@ -17,7 +17,8 @@ import { join } from "node:path"
 import { GlobServiceTag, GlobServiceLive, type GlobError } from "./GlobService"
 import { FileStatServiceTag, FileStatServiceLive, type FileStatError } from "./FileStatService"
 import { DiskStatsServiceTag, DiskStatsServiceLive } from "./DiskStatsService"
-import { PlanStorageServiceTag, JsonPlanStorageService, type PlanStorageError } from "./PlanStorageService"
+import { PlanStorageServiceTag, type PlanStorageError } from "./PlanStorageService"
+import { SqlitePlanStorageService } from "./SqlitePlanStorageService"
 import { createMovePlan } from "../domain/MovePlan"
 
 // =============================================================================
@@ -168,17 +169,17 @@ describe("DiskStatsService (real IO)", () => {
 // =============================================================================
 
 describe("PlanStorageService (real IO)", () => {
-  const service = pipe(JsonPlanStorageService, Layer.provide(BunContext.layer))
+  const service = SqlitePlanStorageService
 
   test("save and load round-trip", async () => {
     const planPath = join(testDir, "test-plan.json")
     const testPlan = createMovePlan([
       {
         file: {
-          absolutePath: "/mnt/spillover/file.mkv",
+          absolutePath: "/mnt/source/file.mkv",
           relativePath: "file.mkv",
           sizeBytes: 1000,
-          diskPath: "/mnt/spillover",
+          diskPath: "/mnt/source",
         },
         targetDiskPath: "/mnt/disk1",
         destinationPath: "/mnt/disk1/file.mkv",
@@ -189,7 +190,7 @@ describe("PlanStorageService (real IO)", () => {
     // Save
     await pipe(
       PlanStorageServiceTag,
-      Effect.flatMap((svc) => svc.save(testPlan, "/mnt/spillover", planPath)),
+      Effect.flatMap((svc) => svc.save(testPlan, "/mnt/source", {}, planPath)),
       Effect.provide(service),
       Effect.runPromise
     )
@@ -202,9 +203,10 @@ describe("PlanStorageService (real IO)", () => {
       Effect.runPromise
     )
 
-    expect(loaded.version).toBe(2)
-    expect(loaded.spilloverDisk).toBe("/mnt/spillover")
+    // Test behavior: can load what was saved
+    expect(loaded.sourceDisk).toBe("/mnt/source")
     expect(Object.keys(loaded.moves)).toHaveLength(1)
+    expect(loaded.diskStats).toBeDefined()
   })
 
   test("load non-existent file returns PlanStorageError", async () => {
@@ -241,7 +243,7 @@ describe("PlanStorageService (real IO)", () => {
     // Create file first
     await pipe(
       PlanStorageServiceTag,
-      Effect.flatMap((svc) => svc.save(createMovePlan([]), "/mnt/spillover", planPath)),
+      Effect.flatMap((svc) => svc.save(createMovePlan([]), "/mnt/source", {}, planPath)),
       Effect.provide(service),
       Effect.runPromise
     )
@@ -258,14 +260,14 @@ describe("PlanStorageService (real IO)", () => {
 
   test("updateMoveStatus updates move and persists to file", async () => {
     const planPath = join(testDir, "update-status-test.json")
-    const sourceAbsPath = "/mnt/spillover/file.mkv"
+    const sourceAbsPath = "/mnt/source/file.mkv"
     const testPlan = createMovePlan([
       {
         file: {
           absolutePath: sourceAbsPath,
           relativePath: "file.mkv",
           sizeBytes: 1000,
-          diskPath: "/mnt/spillover",
+          diskPath: "/mnt/source",
         },
         targetDiskPath: "/mnt/disk1",
         destinationPath: "/mnt/disk1/file.mkv",
@@ -276,7 +278,7 @@ describe("PlanStorageService (real IO)", () => {
     // Save initial plan
     await pipe(
       PlanStorageServiceTag,
-      Effect.flatMap((svc) => svc.save(testPlan, "/mnt/spillover", planPath)),
+      Effect.flatMap((svc) => svc.save(testPlan, "/mnt/source", {}, planPath)),
       Effect.provide(service),
       Effect.runPromise
     )
@@ -302,14 +304,14 @@ describe("PlanStorageService (real IO)", () => {
 
   test("updateMoveStatus records error for failed moves", async () => {
     const planPath = join(testDir, "update-failed-test.json")
-    const sourceAbsPath = "/mnt/spillover/file.mkv"
+    const sourceAbsPath = "/mnt/source/file.mkv"
     const testPlan = createMovePlan([
       {
         file: {
           absolutePath: sourceAbsPath,
           relativePath: "file.mkv",
           sizeBytes: 1000,
-          diskPath: "/mnt/spillover",
+          diskPath: "/mnt/source",
         },
         targetDiskPath: "/mnt/disk1",
         destinationPath: "/mnt/disk1/file.mkv",
@@ -319,7 +321,7 @@ describe("PlanStorageService (real IO)", () => {
 
     await pipe(
       PlanStorageServiceTag,
-      Effect.flatMap((svc) => svc.save(testPlan, "/mnt/spillover", planPath)),
+      Effect.flatMap((svc) => svc.save(testPlan, "/mnt/source", {}, planPath)),
       Effect.provide(service),
       Effect.runPromise
     )
@@ -348,7 +350,7 @@ describe("PlanStorageService (real IO)", () => {
     // Create file
     await pipe(
       PlanStorageServiceTag,
-      Effect.flatMap((svc) => svc.save(createMovePlan([]), "/mnt/spillover", planPath)),
+      Effect.flatMap((svc) => svc.save(createMovePlan([]), "/mnt/source", {}, planPath)),
       Effect.provide(service),
       Effect.runPromise
     )

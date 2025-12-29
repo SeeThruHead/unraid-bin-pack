@@ -8,6 +8,8 @@
  */
 
 import { Database } from "bun:sqlite"
+import { mkdirSync } from "fs"
+import { dirname } from "path"
 import { Effect, Layer, Match, pipe } from "effect"
 import {
   PlanStorageServiceTag,
@@ -27,9 +29,9 @@ import {
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS plan_meta (
     id INTEGER PRIMARY KEY CHECK (id = 1),
-    version INTEGER NOT NULL DEFAULT 2,
+    version INTEGER NOT NULL DEFAULT 3,
     created_at TEXT NOT NULL,
-    spillover_disk TEXT NOT NULL
+    source_disk TEXT NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS moves (
@@ -41,6 +43,13 @@ const SCHEMA = `
     size_bytes INTEGER NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('pending', 'in_progress', 'completed', 'skipped', 'failed')),
     reason TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS disk_stats (
+    disk_path TEXT PRIMARY KEY,
+    total_bytes INTEGER NOT NULL,
+    free_bytes INTEGER NOT NULL,
+    bytes_to_move INTEGER NOT NULL
   );
 
   CREATE INDEX IF NOT EXISTS idx_moves_status ON moves(status);
@@ -118,7 +127,7 @@ export const SqlitePlanStorageService = Layer.succeed(
         catch: (e) => matchSaveError(path)(detectErrorKind(e)),
       })
 
-    const save: PlanStorageService["save"] = (plan, spilloverDisk, path) =>
+    const save: PlanStorageService["save"] = (plan, sourceDisk, diskStats, path) =>
       pipe(
         openDb(path),
         Effect.flatMap((db) =>
@@ -128,11 +137,12 @@ export const SqlitePlanStorageService = Layer.succeed(
                 // Clear existing data
                 db.run("DELETE FROM plan_meta")
                 db.run("DELETE FROM moves")
+                db.run("DELETE FROM disk_stats")
 
                 // Insert plan metadata
                 db.run(
-                  "INSERT INTO plan_meta (id, version, created_at, spillover_disk) VALUES (1, 2, ?, ?)",
-                  [new Date().toISOString(), spilloverDisk]
+                  "INSERT INTO plan_meta (id, version, created_at, source_disk) VALUES (1, 3, ?, ?)",
+                  [new Date().toISOString(), sourceDisk]
                 )
 
                 // Insert moves
@@ -151,6 +161,21 @@ export const SqlitePlanStorageService = Layer.succeed(
                     move.file.sizeBytes,
                     move.status,
                     move.reason ?? null
+                  )
+                }
+
+                // Insert disk stats
+                const insertDiskStat = db.prepare(`
+                  INSERT INTO disk_stats (disk_path, total_bytes, free_bytes, bytes_to_move)
+                  VALUES (?, ?, ?, ?)
+                `)
+
+                for (const [diskPath, stat] of Object.entries(diskStats)) {
+                  insertDiskStat.run(
+                    diskPath,
+                    stat.totalBytes,
+                    stat.freeBytes,
+                    stat.bytesToMove
                   )
                 }
               })()
@@ -175,7 +200,7 @@ export const SqlitePlanStorageService = Layer.succeed(
           const meta = db.query("SELECT * FROM plan_meta WHERE id = 1").get() as {
             version: number
             created_at: string
-            spillover_disk: string
+            source_disk: string
           } | null
 
           if (!meta) {
@@ -194,6 +219,13 @@ export const SqlitePlanStorageService = Layer.succeed(
             reason: string | null
           }>
 
+          const diskStatRows = db.query("SELECT * FROM disk_stats").all() as Array<{
+            disk_path: string
+            total_bytes: number
+            free_bytes: number
+            bytes_to_move: number
+          }>
+
           db.close()
 
           const moves: SerializedPlan["moves"] = {}
@@ -209,11 +241,21 @@ export const SqlitePlanStorageService = Layer.succeed(
             }
           }
 
+          const diskStats: SerializedPlan["diskStats"] = {}
+          for (const row of diskStatRows) {
+            diskStats[row.disk_path] = {
+              totalBytes: row.total_bytes,
+              freeBytes: row.free_bytes,
+              bytesToMove: row.bytes_to_move,
+            }
+          }
+
           return {
-            version: 2 as const,
+            version: 3 as const,
             createdAt: meta.created_at,
-            spilloverDisk: meta.spillover_disk,
+            sourceDisk: meta.source_disk,
             moves,
+            diskStats,
           }
         },
         catch: (e) => {

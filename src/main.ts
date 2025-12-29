@@ -16,10 +16,10 @@
 
 import { Command } from "@effect/cli"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
-import { Effect, Option } from "effect"
+import { Effect, Option, Logger, LogLevel } from "effect"
 
 import * as Opts from "./cli/options"
-import { runPlan, runApply, createAppLayer, withErrorHandling } from "./cli/handler"
+import { runPlan, runApply, runShow, createAppLayer, withErrorHandling } from "./cli/handler"
 
 // =============================================================================
 // Plan subcommand
@@ -30,32 +30,37 @@ const planCommand = Command.make(
   {
     src: Opts.src,
     dest: Opts.dest,
-    threshold: Opts.threshold,
-    algorithm: Opts.algorithm,
+    minSpace: Opts.minSpace,
+    minFileSize: Opts.minFileSize,
+    pathFilter: Opts.pathFilter,
     include: Opts.include,
     exclude: Opts.exclude,
     minSplitSize: Opts.minSplitSize,
-    folderThreshold: Opts.folderThreshold,
+    moveAsFolderThreshold: Opts.moveAsFolderThreshold,
     planFile: Opts.planFile,
     force: Opts.force,
-    storage: Opts.storage,
+    debug: Opts.debug,
   },
   (opts) =>
     withErrorHandling(
       runPlan({
         src: Option.getOrUndefined(opts.src),
         dest: Option.getOrUndefined(opts.dest),
-        threshold: opts.threshold,
-        algorithm: opts.algorithm,
+        minSpace: opts.minSpace,
+        minFileSize: opts.minFileSize,
+        pathFilter: opts.pathFilter,
         include: Option.getOrUndefined(opts.include),
         exclude: Option.getOrUndefined(opts.exclude),
         minSplitSize: opts.minSplitSize,
-        folderThreshold: opts.folderThreshold,
+        moveAsFolderThreshold: opts.moveAsFolderThreshold,
         planFile: Option.getOrUndefined(opts.planFile),
         force: opts.force,
-        storage: opts.storage,
+        debug: opts.debug,
       })
-    ).pipe(Effect.provide(createAppLayer(opts.storage)))
+    ).pipe(
+      opts.debug ? Effect.provide(Logger.minimumLogLevel(LogLevel.Debug)) : (x => x),
+      Effect.provide(createAppLayer())
+    )
 ).pipe(
   Command.withDescription(
     "Scan source disk and compute optimal move plan"
@@ -72,7 +77,6 @@ const applyCommand = Command.make(
     planFile: Opts.planFile,
     concurrency: Opts.concurrency,
     dryRun: Opts.dryRun,
-    storage: Opts.storage,
   },
   (opts) =>
     withErrorHandling(
@@ -80,11 +84,29 @@ const applyCommand = Command.make(
         planFile: Option.getOrUndefined(opts.planFile),
         concurrency: opts.concurrency,
         dryRun: opts.dryRun,
-        storage: opts.storage,
       })
-    ).pipe(Effect.provide(createAppLayer(opts.storage)))
+    ).pipe(Effect.provide(createAppLayer()))
 ).pipe(
   Command.withDescription("Execute the saved move plan")
+)
+
+// =============================================================================
+// Show subcommand
+// =============================================================================
+
+const showCommand = Command.make(
+  "show",
+  {
+    planFile: Opts.planFile,
+  },
+  (opts) =>
+    withErrorHandling(
+      runShow({
+        planFile: Option.getOrUndefined(opts.planFile),
+      })
+    ).pipe(Effect.provide(createAppLayer()))
+).pipe(
+  Command.withDescription("Display the saved move plan")
 )
 
 // =============================================================================
@@ -92,7 +114,7 @@ const applyCommand = Command.make(
 // =============================================================================
 
 const rootCommand = Command.make("unraid-bin-pack", {}).pipe(
-  Command.withSubcommands([planCommand, applyCommand]),
+  Command.withSubcommands([planCommand, applyCommand, showCommand]),
   Command.withDescription(
     "Consolidate files across Unraid disks using bin-packing"
   )

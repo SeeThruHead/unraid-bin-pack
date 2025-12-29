@@ -16,23 +16,44 @@ Consolidate files across Unraid disks using bin-packing algorithms. Move files f
 
 ## Quick Start
 
-### Docker (Recommended for Unraid)
+### Easy Install (Recommended)
+
+Generate a wrapper script with one command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SeeThruHead/unraid-bin-pack/main/install.sh | bash
+```
+
+This will prompt you for mount points and create a `./unraid-bin-pack` script. Then use it like:
+
+```bash
+# Create a plan
+./unraid-bin-pack plan --path-filter "/Movies,/TV,/Anime"
+
+# Review the plan
+./unraid-bin-pack show
+
+# Test with dry-run
+./unraid-bin-pack apply --dry-run
+
+# Execute the plan
+./unraid-bin-pack apply
+```
+
+### Manual Docker Usage
 
 ```bash
 # Create a plan (auto-discovers disks at /mnt/disk*)
-docker run --rm -v /mnt:/mnt seethruhead/unraid-bin-pack plan
-
-# Test with dry-run
-docker run --rm -v /mnt:/mnt seethruhead/unraid-bin-pack apply --dry-run
+docker run --rm -v /mnt:/mnt -v /mnt/user/appdata/unraid-bin-pack:/config seethruhead/unraid-bin-pack plan
 
 # Execute the plan
-docker run --rm -v /mnt:/mnt seethruhead/unraid-bin-pack apply
+docker run --rm -v /mnt:/mnt -v /mnt/user/appdata/unraid-bin-pack:/config seethruhead/unraid-bin-pack apply
 ```
 
 By default, `plan` will:
 - Auto-discover disks at `/mnt/disk*`
-- Select the **least full** disk as the source (to consolidate from)
-- Use all other disks as destinations
+- Consolidate files from the **least full** disk to other disks
+- Only move files under `/media/Movies`, `/media/TV`, `/media/Anime` (configurable with `--path-filter`)
 
 ### Build from Source
 
@@ -47,22 +68,24 @@ bun run src/main.ts plan --src /mnt/disk3 --dest /mnt/disk1,/mnt/disk2
 
 ### `plan` - Generate a move plan
 
-Scans the source disk and computes optimal file placement across destination disks.
+Scans disks and computes optimal file placement using consolidation algorithm.
 
 ```bash
 unraid-bin-pack plan [options]
 
 Options:
-  --src <path>             Source disk to move files from (auto-selects least full if not set)
-  --dest <paths>           Comma-separated destination disk paths (auto-discovers at /mnt/disk* if not set)
-  --threshold <size>       Min free space per disk (default: 50MB)
-  --algorithm <alg>        Packing algorithm: best-fit, first-fit (default: best-fit)
-  --min-split-size <sz>    Min folder size to split (default: 1GB)
-  --folder-threshold <n>   Ratio for keeping folders together (default: 0.9)
-  --plan-file <path>       Where to save the plan (default: /mnt/user/appdata/unraid-bin-pack/plan.db)
-  --exclude <patterns>     Glob patterns to exclude
-  --force                  Overwrite existing partial plan without prompting
-  --storage <backend>      Storage backend: sqlite (default) or json
+  --src <path>                   Source disk(s) to move files from (comma-separated, auto-selects least full if not set)
+  --dest <paths>                 Comma-separated destination disk paths (auto-discovers at /mnt/disk* if not set)
+  --min-space <size>             Min free space per disk (default: 50MB)
+  --min-file-size <size>         Min file size to move (default: 1MB)
+  --path-filter <paths>          Path prefixes to include (default: /media/Movies,/media/TV,/media/Anime)
+  --min-split-size <sz>          Min folder size to split (default: 1GB)
+  --move-as-folder-threshold <n> Ratio for keeping folders together (default: 0.9)
+  --plan-file <path>             Where to save the plan (default: /mnt/user/appdata/unraid-bin-pack/plan.db)
+  --include <patterns>           File patterns to include (e.g., '*.mkv,*.mp4')
+  --exclude <patterns>           Patterns to exclude (e.g., '.DS_Store,@eaDir')
+  --force                        Overwrite existing partial plan without prompting
+  --debug                        Enable verbose debug logging
 ```
 
 ### `apply` - Execute a saved plan
@@ -75,8 +98,18 @@ unraid-bin-pack apply [options]
 Options:
   --plan-file <path>       Plan file to apply (default: /mnt/user/appdata/unraid-bin-pack/plan.db)
   --dry-run                Show what would happen without moving files
-  --concurrency <n>        Parallel transfers per disk (default: 4)
-  --storage <backend>      Storage backend: sqlite (default) or json
+  --concurrency <n>        Parallel transfers (default: 4)
+```
+
+### `show` - Display saved plan
+
+Shows the current plan details and disk states.
+
+```bash
+unraid-bin-pack show [options]
+
+Options:
+  --plan-file <path>       Plan file to display (default: /mnt/user/appdata/unraid-bin-pack/plan.db)
 ```
 
 ## Safety Features
@@ -91,19 +124,22 @@ Options:
 
 ## Algorithm
 
-Uses **Best-Fit Decreasing** by default:
+Uses **disk-by-disk consolidation** with smart file combination:
 
-1. Scans source disk for files
-2. Groups files by top-level folder (keeps movie/show folders together)
-3. Sorts groups by size (largest first)
-4. Places each on the disk with least remaining space that still fits
-5. Large folders that don't fit anywhere are "exploded" into individual files
+1. Ranks disks by fullness (least full first)
+2. For each source disk:
+   - Finds the best **combination** of files that fills destination disks efficiently
+   - Considers multiple files together (e.g., 345MB + 200MB) for better packing
+   - Uses bucketing and sampling to handle large file counts efficiently
+   - Moves files and removes disk from destination pool
+3. Repeats until no more files can be moved
 
-### Folder Grouping Heuristics
+### Key Features
 
-- **Movie-like folders**: If the largest file is ≥90% of folder size, keep together
-- **Min split size**: Folders smaller than 1GB are never split
-- **TV show folders**: Each season/episode group evaluated separately
+- **Combination packing**: Finds multiple files that fit together better than single large files
+- **File filtering**: Only considers files ≥ 1MB by default, matching path prefixes
+- **Progressive consolidation**: Works through disks from least to most full
+- **Efficient matching**: Uses size-based buckets and sampling for performance
 
 ## Architecture
 
@@ -118,20 +154,21 @@ The project follows a **layered architecture** with strict dependency rules, bui
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                      Service Layer                          │
-│  DiskService, ScannerService, BinPackService, TransferService│
+│  DiskService, ScannerService, SimpleConsolidator,           │
+│  TransferService, LoggerService                             │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   Infrastructure Layer                      │
 │  GlobService, FileStatService, DiskStatsService,            │
-│  ShellService, PlanStorageService                           │
+│  ShellService, SqlitePlanStorageService                     │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                       Domain Layer                          │
-│  Disk, FileEntry, FolderGroup, MovePlan                     │
+│  Disk, FileEntry, FolderGroup, MovePlan, WorldView          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -190,54 +227,55 @@ export type DiskError = DiskNotFound | DiskPermissionDenied | DiskNotMountPoint
 
 This enables exhaustive error handling and user-friendly messages.
 
-#### Storage Backends
+#### Storage Backend
 
-Plan storage supports multiple backends via the `PlanStorageService` interface:
+Plan storage uses SQLite via the `PlanStorageService` interface:
 
-| Backend | File | Use Case |
+| Backend | File | Features |
 |---------|------|----------|
-| `JsonPlanStorageService` | `plan.json` | Simple, human-readable |
-| `SqlitePlanStorageService` | `plan.db` | Concurrent-safe, atomic updates |
+| `SqlitePlanStorageService` | `plan.db` | Atomic updates, concurrent-safe, efficient queries |
 
-Both implement the same interface:
-- `save(plan, spilloverDisk, path)` - Create new plan
+The service interface provides:
+- `save(plan, sourceDisk, diskStats, path)` - Create new plan
 - `load(path)` - Load existing plan
 - `exists(path)` - Check if plan exists
-- `updateMoveStatus(path, source, status, error?)` - Update individual move
+- `updateMoveStatus(path, source, status, error?)` - Update individual move (atomic)
 - `delete(path)` - Remove plan after completion
 
 ## Directory Structure
 
 ```
 src/
-├── main.ts                 # CLI entry point
+├── main.ts                          # CLI entry point
 ├── cli/
-│   ├── handler.ts          # Command handlers (runPlan, runApply)
-│   ├── options.ts          # CLI option definitions
-│   └── errors.ts           # Error formatting for CLI output
+│   ├── handler.ts                   # Command handlers (runPlan, runApply, runShow)
+│   ├── options.ts                   # CLI option definitions
+│   └── errors.ts                    # Error formatting for CLI output
 ├── services/
-│   ├── DiskService.ts      # Disk discovery and validation
-│   ├── ScannerService.ts   # File scanning with grouping
-│   ├── BinPackService.ts   # Bin-packing algorithm
-│   └── TransferService.ts  # Rsync-based file transfer
+│   ├── DiskService.ts               # Disk discovery and validation
+│   ├── ScannerService.ts            # File scanning
+│   ├── SimpleConsolidator.ts        # Disk-by-disk consolidation algorithm
+│   ├── TransferService.ts           # Rsync-based file transfer
+│   └── LoggerService.ts             # Formatted console output
 ├── infra/
-│   ├── GlobService.ts      # File globbing (Bun.Glob)
-│   ├── FileStatService.ts  # File stat operations
-│   ├── DiskStatsService.ts # Disk space queries
-│   ├── ShellService.ts     # Shell command execution
-│   ├── PlanStorageService.ts      # JSON plan storage
-│   └── SqlitePlanStorageService.ts # SQLite plan storage
+│   ├── GlobService.ts               # File globbing (Bun.Glob)
+│   ├── FileStatService.ts           # File stat operations
+│   ├── DiskStatsService.ts          # Disk space queries
+│   ├── ShellService.ts              # Shell command execution
+│   ├── PlanStorageService.ts        # Plan storage interface & types
+│   └── SqlitePlanStorageService.ts  # SQLite plan storage implementation
 ├── domain/
-│   ├── Disk.ts             # Disk type and utilities
-│   ├── FileEntry.ts        # File metadata type
-│   ├── FolderGroup.ts      # Folder grouping logic
-│   └── MovePlan.ts         # Move plan type
+│   ├── Disk.ts                      # Disk type
+│   ├── FileEntry.ts                 # File metadata type
+│   ├── FolderGroup.ts               # Folder grouping logic
+│   ├── MovePlan.ts                  # Move plan type
+│   └── WorldView.ts                 # Disk + file state snapshot
 ├── lib/
-│   └── parseSize.ts        # Human-readable size parsing
+│   └── parseSize.ts                 # Human-readable size parsing
 ├── test/
-│   └── TestContext.ts      # Test utilities and mocks
+│   └── TestContext.ts               # Test utilities and mocks
 └── integration/
-    └── handlers.test.ts    # End-to-end handler tests
+    └── handlers.test.ts             # End-to-end handler tests
 ```
 
 ## Development

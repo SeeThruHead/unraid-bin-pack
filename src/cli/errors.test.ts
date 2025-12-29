@@ -73,10 +73,10 @@ describe("Domain error constructors", () => {
   })
 
   test("scanPermissionDenied creates actionable error", () => {
-    const error = scanPermissionDenied("/mnt/spillover")
+    const error = scanPermissionDenied("/mnt/source")
 
     expect(error.title).toBe("Permission denied during scan")
-    expect(error.detail).toContain("/mnt/spillover")
+    expect(error.detail).toContain("/mnt/source")
     expect(error.detail).toContain("permission denied")
   })
 
@@ -97,10 +97,10 @@ describe("Domain error constructors", () => {
   })
 
   test("sourcePermissionDenied creates actionable error", () => {
-    const error = sourcePermissionDenied("/mnt/spillover/file.mkv")
+    const error = sourcePermissionDenied("/mnt/source/file.mkv")
 
     expect(error.title).toBe("Cannot read source file")
-    expect(error.detail).toContain("/mnt/spillover/file.mkv")
+    expect(error.detail).toContain("/mnt/source/file.mkv")
     expect(error.suggestion).toContain("read permission")
   })
 
@@ -113,10 +113,10 @@ describe("Domain error constructors", () => {
   })
 
   test("sourceNotFound creates actionable error", () => {
-    const error = sourceNotFound("/mnt/spillover/file.mkv")
+    const error = sourceNotFound("/mnt/source/file.mkv")
 
     expect(error.title).toBe("Source file missing")
-    expect(error.detail).toContain("/mnt/spillover/file.mkv")
+    expect(error.detail).toContain("/mnt/source/file.mkv")
     expect(error.detail).toContain("no longer exists")
   })
 
@@ -130,13 +130,13 @@ describe("Domain error constructors", () => {
 
   test("transferFailed creates actionable error", () => {
     const error = transferFailed(
-      "/mnt/spillover/file.mkv",
+      "/mnt/source/file.mkv",
       "/mnt/disk1/file.mkv",
       "network error"
     )
 
     expect(error.title).toBe("Transfer failed")
-    expect(error.detail).toContain("/mnt/spillover/file.mkv")
+    expect(error.detail).toContain("/mnt/source/file.mkv")
     expect(error.detail).toContain("/mnt/disk1/file.mkv")
     expect(error.detail).toContain("network error")
   })
@@ -250,7 +250,7 @@ describe("fromDomainError with typed DiskService errors", () => {
 
 describe("fromDomainError with typed ScannerService errors", () => {
   test("converts ScanPathNotFound to scanFailed", () => {
-    const error = { _tag: "ScanPathNotFound", path: "/mnt/spillover" }
+    const error = { _tag: "ScanPathNotFound", path: "/mnt/source" }
     const appError = fromDomainError(error)
 
     expect(appError.title).toBe("Scan failed")
@@ -258,15 +258,15 @@ describe("fromDomainError with typed ScannerService errors", () => {
   })
 
   test("converts ScanPermissionDenied to scanPermissionDenied", () => {
-    const error = { _tag: "ScanPermissionDenied", path: "/mnt/spillover" }
+    const error = { _tag: "ScanPermissionDenied", path: "/mnt/source" }
     const appError = fromDomainError(error)
 
     expect(appError.title).toBe("Permission denied during scan")
-    expect(appError.detail).toContain("/mnt/spillover")
+    expect(appError.detail).toContain("/mnt/source")
   })
 
   test("converts ScanFailed to scanFailed", () => {
-    const error = { _tag: "ScanFailed", path: "/mnt/spillover", reason: "I/O error" }
+    const error = { _tag: "ScanFailed", path: "/mnt/source", reason: "I/O error" }
     const appError = fromDomainError(error)
 
     expect(appError.title).toBe("Scan failed")
@@ -274,7 +274,7 @@ describe("fromDomainError with typed ScannerService errors", () => {
   })
 
   test("converts FileStatFailed to scanFailed", () => {
-    const error = { _tag: "FileStatFailed", path: "/mnt/spillover/file.mkv", reason: "broken symlink" }
+    const error = { _tag: "FileStatFailed", path: "/mnt/source/file.mkv", reason: "broken symlink" }
     const appError = fromDomainError(error)
 
     expect(appError.title).toBe("Scan failed")
@@ -284,19 +284,19 @@ describe("fromDomainError with typed ScannerService errors", () => {
 
 describe("fromDomainError with typed TransferService errors", () => {
   test("converts TransferSourceNotFound to sourceNotFound", () => {
-    const error = { _tag: "TransferSourceNotFound", path: "/mnt/spillover/file.mkv" }
+    const error = { _tag: "TransferSourceNotFound", path: "/mnt/source/file.mkv" }
     const appError = fromDomainError(error)
 
     expect(appError.title).toBe("Source file missing")
-    expect(appError.detail).toContain("/mnt/spillover/file.mkv")
+    expect(appError.detail).toContain("/mnt/source/file.mkv")
   })
 
   test("converts TransferSourcePermissionDenied to sourcePermissionDenied", () => {
-    const error = { _tag: "TransferSourcePermissionDenied", path: "/mnt/spillover/file.mkv" }
+    const error = { _tag: "TransferSourcePermissionDenied", path: "/mnt/source/file.mkv" }
     const appError = fromDomainError(error)
 
     expect(appError.title).toBe("Cannot read source file")
-    expect(appError.detail).toContain("/mnt/spillover/file.mkv")
+    expect(appError.detail).toContain("/mnt/source/file.mkv")
   })
 
   test("converts TransferDestinationPermissionDenied to destinationPermissionDenied", () => {
@@ -326,7 +326,7 @@ describe("fromDomainError with typed TransferService errors", () => {
   test("converts TransferFailed to transferFailed", () => {
     const error = {
       _tag: "TransferFailed",
-      source: "/mnt/spillover/file.mkv",
+      source: "/mnt/source/file.mkv",
       destination: "/mnt/disk1/file.mkv",
       reason: "network error",
     }

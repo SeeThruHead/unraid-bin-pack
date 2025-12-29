@@ -67,11 +67,15 @@ export const parseSize = (input: string): number => {
 
 /**
  * Format bytes as human-readable string.
+ * Handles negative values by preserving the sign.
  */
 export const formatSize = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-  if (bytes < 1024 * 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
-  return `${(bytes / 1024 / 1024 / 1024 / 1024).toFixed(2)} TB`
+  const absBytes = Math.abs(bytes)
+  const sign = bytes < 0 ? "-" : ""
+
+  if (absBytes < 1024) return `${sign}${absBytes} B`
+  if (absBytes < 1024 * 1024) return `${sign}${(absBytes / 1024).toFixed(1)} KB`
+  if (absBytes < 1024 * 1024 * 1024) return `${sign}${(absBytes / 1024 / 1024).toFixed(1)} MB`
+  if (absBytes < 1024 * 1024 * 1024 * 1024) return `${sign}${(absBytes / 1024 / 1024 / 1024).toFixed(2)} GB`
+  return `${sign}${(absBytes / 1024 / 1024 / 1024 / 1024).toFixed(2)} TB`
 }

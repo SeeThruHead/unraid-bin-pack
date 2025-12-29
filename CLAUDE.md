@@ -1,3 +1,17 @@
+## Project Info
+
+- Docker Hub username: **seethruhead**
+- Docker image: `seethruhead/unraid-bin-pack`
+- **Use `test` tag for testing (before commits): `seethruhead/unraid-bin-pack:test`**
+- **Use `latest` tag for stable releases (after commits)**
+
+## Current Work
+
+**IMPORTANT: Check `TASKS.md` for the current task and implementation plan.**
+
+The current task is fixing the WorldView issue in iterative emptying - see TASKS.md for full details.
+
+## Bun Runtime
 
 Default to using Bun instead of Node.js.
 

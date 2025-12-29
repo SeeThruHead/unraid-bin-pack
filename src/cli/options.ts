@@ -36,28 +36,41 @@ export const dest = Options.text("dest").pipe(
 )
 
 /**
- * Minimum free space to maintain on each target disk after moves.
- * Prevents filling disks completely.
+ * Minimum free space to leave on each disk after moves.
+ * Prevents filling destination disks completely.
  *
  * Accepts human-readable sizes: 50MB, 1GB, 500K, etc.
  *
  * @default "50MB"
  */
-export const threshold = Options.text("threshold").pipe(
-  Options.withDescription("Min free space per disk (e.g., 50MB, 1GB)"),
+export const minSpace = Options.text("min-space").pipe(
+  Options.withDescription("Min free space to leave on each disk (e.g., 50MB, 1GB)"),
   Options.withDefault("50MB")
 )
 
 /**
- * Bin-packing algorithm:
- * - best-fit: Place on disk with least remaining space that fits (fills disks efficiently)
- * - first-fit: Place on first disk that fits (faster, less optimal)
+ * Minimum file size to consider for moving.
+ * Files smaller than this are ignored to avoid wasting effort on tiny files.
  *
- * @default "best-fit"
+ * Accepts human-readable sizes: 1MB, 500KB, etc.
+ *
+ * @default "1MB"
  */
-export const algorithm = Options.choice("algorithm", ["best-fit", "first-fit"]).pipe(
-  Options.withDescription("Packing algorithm: best-fit (efficient) or first-fit (fast)"),
-  Options.withDefault("best-fit" as const)
+export const minFileSize = Options.text("min-file-size").pipe(
+  Options.withDescription("Min file size to move (e.g., 1MB, 500KB)"),
+  Options.withDefault("1MB")
+)
+
+/**
+ * Path prefixes to include (comma-separated).
+ * Only files under these paths will be considered for consolidation.
+ * Empty string means no filter (all paths).
+ *
+ * @default "/media/Movies,/media/TV,/media/Anime"
+ */
+export const pathFilter = Options.text("path-filter").pipe(
+  Options.withDescription("Path prefixes to include (e.g., '/media/Movies,/media/TV')"),
+  Options.withDefault("/media/Movies,/media/TV,/media/Anime")
 )
 
 /**
@@ -107,7 +120,7 @@ export const minSplitSize = Options.text("min-split-size").pipe(
  * @example 0.9 means if one file is 90%+ of the folder, keep together
  * @default 0.9
  */
-export const folderThreshold = Options.text("folder-threshold").pipe(
+export const moveAsFolderThreshold = Options.text("move-as-folder-threshold").pipe(
   Options.withDescription("Keep folder together if largest file is this % of total (0.0-1.0)"),
   Options.withDefault("0.9")
 )
@@ -136,6 +149,14 @@ export const dryRun = Options.boolean("dry-run").pipe(
   Options.withDefault(false)
 )
 
+/**
+ * Enable debug logging for troubleshooting.
+ */
+export const debug = Options.boolean("debug").pipe(
+  Options.withDescription("Enable verbose debug logging"),
+  Options.withDefault(false)
+)
+
 // =============================================================================
 // Shared Options
 // =============================================================================
@@ -159,18 +180,6 @@ export const force = Options.boolean("force").pipe(
   Options.withDefault(false)
 )
 
-/**
- * Storage backend for plan files.
- * - json: Human-readable JSON files (default)
- * - sqlite: SQLite database (atomic updates, better for large plans)
- *
- * @default "sqlite"
- */
-export const storage = Options.choice("storage", ["json", "sqlite"]).pipe(
-  Options.withDescription("Storage backend: json or sqlite"),
-  Options.withDefault("sqlite" as const)
-)
-
 // =============================================================================
 // Types
 // =============================================================================
@@ -178,22 +187,22 @@ export const storage = Options.choice("storage", ["json", "sqlite"]).pipe(
 export interface PlanOptions {
   readonly src: string | undefined         // auto-select least full if undefined
   readonly dest: string | undefined        // auto-discover if undefined
-  readonly threshold: string               // parsed with parseSize()
-  readonly algorithm: "best-fit" | "first-fit"
+  readonly minSpace: string                // parsed with parseSize()
+  readonly minFileSize: string             // parsed with parseSize()
+  readonly pathFilter: string              // comma-separated path prefixes
   readonly include: string | undefined
   readonly exclude: string | undefined
   readonly minSplitSize: string            // parsed with parseSize()
-  readonly folderThreshold: string         // parsed with parseFloat()
+  readonly moveAsFolderThreshold: string   // parsed with parseFloat()
   readonly planFile: string | undefined
   readonly force: boolean                  // overwrite existing partial plan
-  readonly storage: "json" | "sqlite"
+  readonly debug?: boolean                 // enable debug-level logging (optional)
 }
 
 export interface ApplyOptions {
   readonly planFile: string | undefined
   readonly concurrency: number
   readonly dryRun: boolean
-  readonly storage: "json" | "sqlite"
 }
 
 // =============================================================================
@@ -203,11 +212,12 @@ export interface ApplyOptions {
 /**
  * Default values optimized for Unraid:
  *
- * --src              (auto)   Least full disk at /mnt/disk*
- * --dest             (auto)   All other disks at /mnt/disk*
- * --threshold        50MB     Keep 50MB free on each disk
- * --algorithm        best-fit Fill disks efficiently
- * --min-split-size   1GB      Never split folders < 1GB
- * --folder-threshold 0.9      Keep folder if one file is 90%+
- * --concurrency      4        4 parallel transfers
+ * --src                      (auto)   Least full disk at /mnt/disk*
+ * --dest                     (auto)   All other disks at /mnt/disk*
+ * --min-space                50MB     Keep 50MB free on each disk
+ * --min-file-size            1MB      Only move files >= 1MB
+ * --path-filter              /media/* Only move files in /media/Movies,TV,Anime
+ * --min-split-size           1GB      Never split folders < 1GB
+ * --move-as-folder-threshold 0.9      Keep folder if one file is 90%+
+ * --concurrency              4        4 parallel transfers
  */

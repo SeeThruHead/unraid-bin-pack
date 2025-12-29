@@ -51,7 +51,7 @@ export interface SavedMove {
   targetDisk: string
   destAbsPath: string
   sizeBytes: number
-  status: string
+  status: "pending" | "in_progress" | "completed" | "skipped" | "failed"
 }
 
 export interface CallLog {
@@ -60,7 +60,7 @@ export interface CallLog {
   glob: Array<{ method: "scan"; pattern: string; cwd: string }>
   shell: Array<{ method: "exec"; command: string }>
   planStorage: Array<
-    | { method: "save"; path: string; moveCount: number; moves: SavedMove[] }
+    | { method: "save"; path: string; moveCount: number; moves: SavedMove[]; sourceDisk: string }
     | { method: "load"; path: string }
     | { method: "exists"; path: string }
     | { method: "updateMoveStatus"; path: string; sourceAbsPath: string; status: "completed" | "failed"; error?: string }
@@ -250,7 +250,7 @@ export function createTestContext(): TestContext {
   const mockPlanStorageService = Layer.succeed(PlanStorageServiceTag, {
     defaultPath: "/mock/default-plan.json",
 
-    save: (plan, _spilloverDisk, path) => {
+    save: (plan, sourceDisk, diskStats, path) => {
       // Check for write permission
       if (planStorageBehavior.denyWrite) {
         return Effect.fail(new PlanPermissionDenied({ path, operation: "write" }))
@@ -265,7 +265,17 @@ export function createTestContext(): TestContext {
         sizeBytes: m.file.sizeBytes,
         status: m.status,
       }))
-      calls.planStorage.push({ method: "save", path, moveCount: plan.moves.length, moves })
+      calls.planStorage.push({ method: "save", path, moveCount: plan.moves.length, moves, sourceDisk })
+
+      // Update savedPlan so subsequent load() calls can return it
+      savedPlan = {
+        version: 3,
+        createdAt: new Date().toISOString(),
+        sourceDisk,
+        diskStats,
+        moves: Object.fromEntries(moves.map(m => [m.sourceAbsPath, m])),
+      }
+
       return Effect.succeed(undefined)
     },
 
@@ -295,6 +305,7 @@ export function createTestContext(): TestContext {
 
     delete: (path: string) => {
       calls.planStorage.push({ method: "delete", path })
+      savedPlan = null
       return Effect.succeed(undefined)
     },
   })

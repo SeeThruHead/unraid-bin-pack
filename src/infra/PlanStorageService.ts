@@ -2,8 +2,7 @@
  * PlanStorageService - persists move plans to disk for plan/apply workflow.
  */
 
-import { Context, Data, Effect, Layer, Match, pipe, Schema } from "effect"
-import { FileSystem } from "@effect/platform"
+import { Context, Data, Effect, Match } from "effect"
 import type { MovePlan, FileMove } from "../domain/MovePlan"
 
 // =============================================================================
@@ -109,18 +108,20 @@ const matchDeleteError = (path: string) =>
 // =============================================================================
 
 /**
- * Plan format v2: Uses source path as key to prevent duplicates by structure.
+ * Plan format v3: Adds disk stats for destination disks.
  *
  * The moves object is keyed by absolute source path, making it impossible
  * to have duplicate entries for the same file regardless of any bugs in
  * the planning or execution code.
  */
 export interface SerializedPlan {
-  readonly version: 2
+  readonly version: 3
   readonly createdAt: string
-  readonly spilloverDisk: string
+  readonly sourceDisk: string
   /** Moves keyed by absolute source path - prevents duplicates by design */
   readonly moves: Record<string, SerializedMove>
+  /** Disk stats for destination disks at plan creation time */
+  readonly diskStats: Record<string, DiskStat>
 }
 
 interface SerializedMove {
@@ -133,35 +134,10 @@ interface SerializedMove {
   readonly reason?: string
 }
 
-// =============================================================================
-// Schemas for validation
-// =============================================================================
-
-const MoveStatusSchema = Schema.Literal("pending", "in_progress", "completed", "skipped", "failed")
-
-const SerializedMoveSchema = Schema.Struct({
-  sourceRelPath: Schema.String,
-  sourceDisk: Schema.String,
-  targetDisk: Schema.String,
-  destAbsPath: Schema.String,
-  sizeBytes: Schema.Number,
-  status: MoveStatusSchema,
-  reason: Schema.optional(Schema.String),
-})
-
-const SerializedPlanSchema = Schema.Struct({
-  version: Schema.Literal(2),
-  createdAt: Schema.String,
-  spilloverDisk: Schema.String,
-  moves: Schema.Record({ key: Schema.String, value: SerializedMoveSchema }),
-})
-
-const decodePlan = Schema.decodeUnknown(SerializedPlanSchema)
-
-/** Format ParseError into a human-readable string */
-const formatParseError = (error: Schema.ParseError): string => {
-  const issue = error.issue
-  return Schema.TreeFormatter.formatIssueSync(issue)
+export interface DiskStat {
+  readonly totalBytes: number
+  readonly freeBytes: number
+  readonly bytesToMove: number
 }
 
 // =============================================================================
@@ -173,7 +149,8 @@ export type MoveStatus = "completed" | "failed"
 export interface PlanStorageService {
   readonly save: (
     plan: MovePlan,
-    spilloverDisk: string,
+    sourceDisk: string,
+    diskStats: Record<string, DiskStat>,
     path: string
   ) => Effect.Effect<void, PlanStorageError>
 
@@ -220,124 +197,20 @@ const serializeMove = (move: FileMove): SerializedMove => ({
   reason: move.reason,
 })
 
-const serializePlan = (plan: MovePlan, spilloverDisk: string): SerializedPlan => ({
-  version: 2,
+const serializePlan = (plan: MovePlan, sourceDisk: string, diskStats: Record<string, DiskStat>): SerializedPlan => ({
+  version: 3,
   createdAt: new Date().toISOString(),
-  spilloverDisk,
+  sourceDisk,
   // Build moves object keyed by source path - duplicates are impossible
   moves: plan.moves.reduce(
     (acc, move) => ({ ...acc, [move.file.absolutePath]: serializeMove(move) }),
     {} as Record<string, SerializedMove>
   ),
+  diskStats,
 })
 
 // =============================================================================
-// JSON file implementation
+// Exports for SQLite implementation (in SqlitePlanStorageService.ts)
 // =============================================================================
 
-export const JsonPlanStorageService = Layer.effect(
-  PlanStorageServiceTag,
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem
-    const defaultPath = `/mnt/user/appdata/unraid-bin-pack/plan.json`
-
-    /** Transform filesystem errors to typed PlanStorageError */
-    const toSaveError = (path: string, error: unknown): PlanStorageError =>
-      matchSaveError(path)(detectErrorKind(error))
-
-    const toLoadError = (path: string, error: unknown): PlanStorageError =>
-      matchLoadError(path)(detectErrorKind(error))
-
-    const save: PlanStorageService["save"] = (plan, spilloverDisk, path) =>
-      pipe(
-        Effect.sync(() => serializePlan(plan, spilloverDisk)),
-        Effect.flatMap((serialized) =>
-          pipe(
-            // Ensure directory exists
-            fs.makeDirectory(`${path.substring(0, path.lastIndexOf("/"))}`, {
-              recursive: true,
-            }),
-            Effect.catchAll(() => Effect.void), // Ignore if exists
-            Effect.flatMap(() =>
-              fs.writeFileString(path, JSON.stringify(serialized, null, 2))
-            )
-          )
-        ),
-        Effect.mapError((e) => toSaveError(path, e))
-      )
-
-    const load: PlanStorageService["load"] = (path) =>
-      pipe(
-        fs.readFileString(path),
-        Effect.mapError((e) => toLoadError(path, e)),
-        Effect.flatMap((content) =>
-          pipe(
-            Effect.try({
-              try: () => JSON.parse(content),
-              catch: (e) =>
-                new PlanParseError({ path, reason: `Invalid JSON: ${e instanceof Error ? e.message : String(e)}` }),
-            }),
-            Effect.flatMap((json) =>
-              pipe(
-                decodePlan(json),
-                Effect.mapError((parseError) =>
-                  new PlanParseError({
-                    path,
-                    reason: `Schema validation failed: ${formatParseError(parseError)}`,
-                  })
-                )
-              )
-            )
-          )
-        )
-      )
-
-    const exists: PlanStorageService["exists"] = (path) =>
-      pipe(
-        fs.exists(path),
-        Effect.mapError((e) => matchLoadError(path)(detectErrorKind(e)))
-      )
-
-    const updateMoveStatus: PlanStorageService["updateMoveStatus"] = (
-      path,
-      sourceAbsPath,
-      status,
-      error
-    ) =>
-      pipe(
-        load(path),
-        Effect.flatMap((plan) => {
-          const move = plan.moves[sourceAbsPath]
-          if (!move) {
-            return Effect.fail(
-              new PlanLoadFailed({ path, reason: `Move not found: ${sourceAbsPath}` }) as PlanStorageError
-            )
-          }
-          const updatedPlan: SerializedPlan = {
-            ...plan,
-            moves: {
-              ...plan.moves,
-              [sourceAbsPath]: {
-                ...move,
-                status,
-                reason: error ?? move.reason,
-              },
-            },
-          }
-          return pipe(
-            fs.writeFileString(path, JSON.stringify(updatedPlan, null, 2)),
-            Effect.mapError((e) => toSaveError(path, e))
-          )
-        }),
-        Effect.catchAll((e) => Effect.fail(e as PlanStorageError))
-      )
-
-    const deletePlan: PlanStorageService["delete"] = (path) =>
-      pipe(
-        fs.remove(path),
-        Effect.mapError((e) => matchDeleteError(path)(detectErrorKind(e)))
-      )
-
-    return { defaultPath, save, load, exists, updateMoveStatus, delete: deletePlan }
-  })
-)
+export { serializePlan }

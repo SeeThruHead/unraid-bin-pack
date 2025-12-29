@@ -38,10 +38,10 @@ describe("SqlitePlanStorageService", () => {
     const testPlan = createMovePlan([
       {
         file: {
-          absolutePath: "/mnt/spillover/file.mkv",
+          absolutePath: "/mnt/source/file.mkv",
           relativePath: "file.mkv",
           sizeBytes: 1000,
-          diskPath: "/mnt/spillover",
+          diskPath: "/mnt/source",
         },
         targetDiskPath: "/mnt/disk1",
         destinationPath: "/mnt/disk1/file.mkv",
@@ -52,7 +52,7 @@ describe("SqlitePlanStorageService", () => {
     // Save
     await pipe(
       PlanStorageServiceTag,
-      Effect.flatMap((svc) => svc.save(testPlan, "/mnt/spillover", planPath)),
+      Effect.flatMap((svc) => svc.save(testPlan, "/mnt/source", {}, planPath)),
       Effect.provide(service),
       Effect.runPromise
     )
@@ -65,10 +65,11 @@ describe("SqlitePlanStorageService", () => {
       Effect.runPromise
     )
 
-    expect(loaded.version).toBe(2)
-    expect(loaded.spilloverDisk).toBe("/mnt/spillover")
+    // Test behavior: can load what was saved
+    expect(loaded.sourceDisk).toBe("/mnt/source")
     expect(Object.keys(loaded.moves)).toHaveLength(1)
-    expect(loaded.moves["/mnt/spillover/file.mkv"]?.status).toBe("pending")
+    expect(loaded.moves["/mnt/source/file.mkv"]?.status).toBe("pending")
+    expect(loaded.diskStats).toBeDefined()
   })
 
   test("load non-existent file returns PlanNotFound error", async () => {
@@ -103,7 +104,7 @@ describe("SqlitePlanStorageService", () => {
 
     await pipe(
       PlanStorageServiceTag,
-      Effect.flatMap((svc) => svc.save(createMovePlan([]), "/mnt/spillover", planPath)),
+      Effect.flatMap((svc) => svc.save(createMovePlan([]), "/mnt/source", {}, planPath)),
       Effect.provide(service),
       Effect.runPromise
     )
@@ -120,14 +121,14 @@ describe("SqlitePlanStorageService", () => {
 
   test("updateMoveStatus updates move atomically", async () => {
     const planPath = join(testDir, "update-status.db")
-    const sourceAbsPath = "/mnt/spillover/file.mkv"
+    const sourceAbsPath = "/mnt/source/file.mkv"
     const testPlan = createMovePlan([
       {
         file: {
           absolutePath: sourceAbsPath,
           relativePath: "file.mkv",
           sizeBytes: 1000,
-          diskPath: "/mnt/spillover",
+          diskPath: "/mnt/source",
         },
         targetDiskPath: "/mnt/disk1",
         destinationPath: "/mnt/disk1/file.mkv",
@@ -137,7 +138,7 @@ describe("SqlitePlanStorageService", () => {
 
     await pipe(
       PlanStorageServiceTag,
-      Effect.flatMap((svc) => svc.save(testPlan, "/mnt/spillover", planPath)),
+      Effect.flatMap((svc) => svc.save(testPlan, "/mnt/source", {}, planPath)),
       Effect.provide(service),
       Effect.runPromise
     )
@@ -161,14 +162,14 @@ describe("SqlitePlanStorageService", () => {
 
   test("updateMoveStatus records error for failed moves", async () => {
     const planPath = join(testDir, "update-failed.db")
-    const sourceAbsPath = "/mnt/spillover/file.mkv"
+    const sourceAbsPath = "/mnt/source/file.mkv"
     const testPlan = createMovePlan([
       {
         file: {
           absolutePath: sourceAbsPath,
           relativePath: "file.mkv",
           sizeBytes: 1000,
-          diskPath: "/mnt/spillover",
+          diskPath: "/mnt/source",
         },
         targetDiskPath: "/mnt/disk1",
         destinationPath: "/mnt/disk1/file.mkv",
@@ -178,7 +179,7 @@ describe("SqlitePlanStorageService", () => {
 
     await pipe(
       PlanStorageServiceTag,
-      Effect.flatMap((svc) => svc.save(testPlan, "/mnt/spillover", planPath)),
+      Effect.flatMap((svc) => svc.save(testPlan, "/mnt/source", {}, planPath)),
       Effect.provide(service),
       Effect.runPromise
     )
@@ -206,7 +207,7 @@ describe("SqlitePlanStorageService", () => {
 
     await pipe(
       PlanStorageServiceTag,
-      Effect.flatMap((svc) => svc.save(createMovePlan([]), "/mnt/spillover", planPath)),
+      Effect.flatMap((svc) => svc.save(createMovePlan([]), "/mnt/source", {}, planPath)),
       Effect.provide(service),
       Effect.runPromise
     )
@@ -239,10 +240,10 @@ describe("SqlitePlanStorageService", () => {
     const planPath = join(testDir, "multi-move.db")
     const moves = Array.from({ length: 100 }, (_, i) => ({
       file: {
-        absolutePath: `/mnt/spillover/file${i}.mkv`,
+        absolutePath: `/mnt/source/file${i}.mkv`,
         relativePath: `file${i}.mkv`,
         sizeBytes: 1000 + i,
-        diskPath: "/mnt/spillover",
+        diskPath: "/mnt/source",
       },
       targetDiskPath: "/mnt/disk1",
       destinationPath: `/mnt/disk1/file${i}.mkv`,
@@ -252,7 +253,7 @@ describe("SqlitePlanStorageService", () => {
 
     await pipe(
       PlanStorageServiceTag,
-      Effect.flatMap((svc) => svc.save(testPlan, "/mnt/spillover", planPath)),
+      Effect.flatMap((svc) => svc.save(testPlan, "/mnt/source", {}, planPath)),
       Effect.provide(service),
       Effect.runPromise
     )
@@ -271,7 +272,7 @@ describe("SqlitePlanStorageService", () => {
       await pipe(
         PlanStorageServiceTag,
         Effect.flatMap((svc) =>
-          svc.updateMoveStatus(planPath, `/mnt/spillover/file${i}.mkv`, "completed")
+          svc.updateMoveStatus(planPath, `/mnt/source/file${i}.mkv`, "completed")
         ),
         Effect.provide(service),
         Effect.runPromise

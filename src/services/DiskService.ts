@@ -177,7 +177,7 @@ export const DiskServiceLive = Layer.effect(
           fs.readDirectory("/mnt"),
           Effect.map((entries) =>
             entries
-              .filter((name) => name.startsWith("disk"))
+              .filter((name) => /^disk\d+$/.test(name))
               .map((name) => `/mnt/${name}`)
               .sort((a, b) => {
                 // Sort numerically: disk1, disk2, disk10
