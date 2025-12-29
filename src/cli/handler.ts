@@ -540,11 +540,13 @@ export const runPlan = (options: PlanOptions, isInteractive: boolean = false) =>
     yield* fs.writeFileString(scriptPath, scriptContent)
 
     // Make script executable (ignore errors in test/mock environment)
-    try {
-      await Bun.$`chmod +x ${scriptPath}`.quiet()
-    } catch {
-      // Ignore chmod errors - script still works with `bash script.sh`
-    }
+    yield* pipe(
+      Effect.tryPromise({
+        try: () => Bun.$`chmod +x ${scriptPath}`.quiet(),
+        catch: () => null,
+      }),
+      Effect.catchAll(() => Effect.void)
+    )
 
     yield* logger.plan.planSaved
     yield* Console.log(`\n✓ Plan script saved to ${scriptPath}`)
