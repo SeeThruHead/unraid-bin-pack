@@ -1,39 +1,19 @@
-/**
- * Application errors - user-friendly, actionable error messages.
- *
- * Uses Effect's Match for exhaustive, type-safe error handling.
- *
- * Each error explains:
- * 1. What happened
- * 2. Why it matters
- * 3. How to fix it
- */
-
 import { Match } from "effect"
 
-// Import all domain error types for exhaustive matching
 import type {
   DiskNotFound,
   DiskNotADirectory,
   DiskNotAMountPoint,
   DiskPermissionDenied,
   DiskStatsFailed,
-} from "../services/DiskService"
+} from "@services/DiskService"
 
 import type {
   ScanPathNotFound,
   ScanPermissionDenied,
   ScanFailed,
   FileStatFailed,
-} from "../services/ScannerService"
-
-import type {
-  PlanNotFound,
-  PlanPermissionDenied,
-  PlanParseError,
-  PlanSaveFailed,
-  PlanLoadFailed,
-} from "../infra/PlanStorageService"
+} from "@services/ScannerService"
 
 import type {
   TransferSourceNotFound,
@@ -42,11 +22,7 @@ import type {
   TransferDiskFull,
   TransferBackendUnavailable,
   TransferFailed,
-} from "../services/TransferService"
-
-// =============================================================================
-// Domain error union - all typed errors from services
-// =============================================================================
+} from "@services/TransferService"
 
 type DiskError =
   | DiskNotFound
@@ -61,13 +37,6 @@ type ScannerError =
   | ScanFailed
   | FileStatFailed
 
-type PlanStorageError =
-  | PlanNotFound
-  | PlanPermissionDenied
-  | PlanParseError
-  | PlanSaveFailed
-  | PlanLoadFailed
-
 type TransferError =
   | TransferSourceNotFound
   | TransferSourcePermissionDenied
@@ -76,11 +45,7 @@ type TransferError =
   | TransferBackendUnavailable
   | TransferFailed
 
-type DomainError = DiskError | ScannerError | PlanStorageError | TransferError
-
-// =============================================================================
-// AppError - formatted user-facing errors
-// =============================================================================
+type DomainError = DiskError | ScannerError | TransferError
 
 export class AppError extends Error {
   readonly _tag = "AppError"
@@ -104,12 +69,7 @@ export class AppError extends Error {
   }
 }
 
-// =============================================================================
-// Error factories - create AppErrors with consistent messaging
-// =============================================================================
-
 const errors = {
-  // Disk errors
   diskNotFound: (path: string) =>
     new AppError(
       "Disk not found",
@@ -145,7 +105,6 @@ const errors = {
       `Run the command with appropriate permissions (e.g., sudo) or check that your user has access to this mount point.`
     ),
 
-  // Scanner errors
   scanFailed: (path: string, reason: string) =>
     new AppError(
       "Scan failed",
@@ -160,7 +119,6 @@ const errors = {
       `Check file permissions or run with elevated privileges.`
     ),
 
-  // Plan errors
   planNotFound: (path: string) =>
     new AppError(
       "No plan found",
@@ -191,7 +149,6 @@ const errors = {
         : `Check that you have read permission to the plan file.`
     ),
 
-  // Transfer errors
   transferFailed: (source: string, destination: string, reason: string) =>
     new AppError(
       "Transfer failed",
@@ -234,7 +191,6 @@ const errors = {
       `Free up space on the target disk or run 'unraid-bin-pack plan' to recompute with current disk states.`
     ),
 
-  // Generic
   unexpected: (message: string) =>
     new AppError(
       "Unexpected error",
@@ -250,32 +206,18 @@ const errors = {
     ),
 }
 
-// =============================================================================
-// Pattern matching for domain errors
-// =============================================================================
-
 const matchDomainError = Match.typeTags<DomainError>()({
-  // Disk errors
   DiskNotFound: (e) => errors.diskNotFound(e.path),
   DiskNotADirectory: (e) => errors.notADirectory(e.path),
   DiskNotAMountPoint: (e) => errors.notAMountPoint(e.path),
   DiskPermissionDenied: (e) => errors.diskPermissionDenied(e.path),
   DiskStatsFailed: (e) => errors.diskStatsFailed(e.path, e.reason),
 
-  // Scanner errors
   ScanPathNotFound: (e) => errors.scanFailed(e.path, "Path does not exist"),
   ScanPermissionDenied: (e) => errors.scanPermissionDenied(e.path),
   ScanFailed: (e) => errors.scanFailed(e.path, e.reason),
   FileStatFailed: (e) => errors.scanFailed(e.path, e.reason),
 
-  // Plan storage errors
-  PlanNotFound: (e) => errors.planNotFound(e.path),
-  PlanPermissionDenied: (e) => errors.planPermissionDenied(e.path, e.operation),
-  PlanParseError: (e) => errors.planCorrupted(e.path, e.reason),
-  PlanSaveFailed: (e) => errors.planSaveFailed(e.path, e.reason),
-  PlanLoadFailed: (e) => errors.planCorrupted(e.path, e.reason),
-
-  // Transfer errors
   TransferSourceNotFound: (e) => errors.sourceNotFound(e.path),
   TransferSourcePermissionDenied: (e) => errors.sourcePermissionDenied(e.path),
   TransferDestinationPermissionDenied: (e) => errors.destinationPermissionDenied(e.path),
@@ -284,57 +226,38 @@ const matchDomainError = Match.typeTags<DomainError>()({
   TransferFailed: (e) => errors.transferFailed(e.source, e.destination, e.reason),
 })
 
-// =============================================================================
-// Type guard for domain errors
-// =============================================================================
-
 const isDomainError = (e: unknown): e is DomainError =>
   typeof e === "object" &&
   e !== null &&
   "_tag" in e &&
   typeof (e as { _tag: unknown })._tag === "string"
 
-// Helper to detect permission-related error messages
 const isPermissionError = (message: string): boolean =>
   message.toLowerCase().includes("permission denied") ||
   message.toLowerCase().includes("eacces") ||
   message.toLowerCase().includes("operation not permitted") ||
   message.toLowerCase().includes("eperm")
 
-// =============================================================================
-// Main conversion function
-// =============================================================================
-
 export const fromDomainError = (error: unknown): AppError => {
-  // Already an AppError
   if (error instanceof AppError) {
     return error
   }
 
-  // Typed domain error - use exhaustive pattern matching
   if (isDomainError(error)) {
     try {
       return matchDomainError(error)
     } catch {
-      // Fall through to generic handling if tag not matched
-      // (handles legacy error types during migration)
     }
   }
 
-  // Standard Error
   if (error instanceof Error) {
     return isPermissionError(error.message)
       ? errors.permissionDenied(error.message)
       : errors.unexpected(error.message)
   }
 
-  // Unknown
   return errors.unexpected(String(error))
 }
-
-// =============================================================================
-// Re-export error factories for direct use
-// =============================================================================
 
 export const {
   diskNotFound,

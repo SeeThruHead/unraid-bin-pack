@@ -1,7 +1,3 @@
-/**
- * WorldView - snapshot of disk and file state for consolidation
- */
-
 import type { FileEntry } from "./FileEntry"
 
 export interface DiskState {

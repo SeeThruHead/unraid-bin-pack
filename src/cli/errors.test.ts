@@ -1,7 +1,3 @@
-/**
- * Tests for error handling - verify domain errors are converted to user-friendly messages.
- */
-
 import { describe, expect, test } from "bun:test"
 import {
   AppError,
@@ -201,10 +197,6 @@ describe("fromDomainError", () => {
   })
 })
 
-// =============================================================================
-// Tests for typed service errors
-// =============================================================================
-
 describe("fromDomainError with typed DiskService errors", () => {
   test("converts DiskNotFound to diskNotFound", () => {
     const error = { _tag: "DiskNotFound", path: "/mnt/disk1" }
@@ -337,54 +329,3 @@ describe("fromDomainError with typed TransferService errors", () => {
   })
 })
 
-describe("fromDomainError with typed PlanStorageService errors", () => {
-  test("converts PlanNotFound to planNotFound", () => {
-    const error = { _tag: "PlanNotFound", path: "/config/plan.json" }
-    const appError = fromDomainError(error)
-
-    expect(appError.title).toBe("No plan found")
-    expect(appError.detail).toContain("/config/plan.json")
-  })
-
-  test("converts PlanPermissionDenied (write) to planPermissionDenied", () => {
-    const error = { _tag: "PlanPermissionDenied", path: "/config/plan.json", operation: "write" as const }
-    const appError = fromDomainError(error)
-
-    expect(appError.title).toBe("Permission denied")
-    expect(appError.detail).toContain("write")
-    expect(appError.suggestion).toContain("write permission")
-  })
-
-  test("converts PlanPermissionDenied (read) to planPermissionDenied", () => {
-    const error = { _tag: "PlanPermissionDenied", path: "/config/plan.json", operation: "read" as const }
-    const appError = fromDomainError(error)
-
-    expect(appError.title).toBe("Permission denied")
-    expect(appError.detail).toContain("read")
-    expect(appError.suggestion).toContain("read permission")
-  })
-
-  test("converts PlanParseError to planCorrupted", () => {
-    const error = { _tag: "PlanParseError", path: "/config/plan.json", reason: "Unexpected token" }
-    const appError = fromDomainError(error)
-
-    expect(appError.title).toBe("Plan file corrupted")
-    expect(appError.detail).toContain("Unexpected token")
-  })
-
-  test("converts PlanSaveFailed to planSaveFailed", () => {
-    const error = { _tag: "PlanSaveFailed", path: "/config/plan.json", reason: "disk full" }
-    const appError = fromDomainError(error)
-
-    expect(appError.title).toBe("Cannot save plan")
-    expect(appError.detail).toContain("disk full")
-  })
-
-  test("converts PlanLoadFailed to planCorrupted", () => {
-    const error = { _tag: "PlanLoadFailed", path: "/config/plan.json", reason: "file locked" }
-    const appError = fromDomainError(error)
-
-    expect(appError.title).toBe("Plan file corrupted")
-    expect(appError.detail).toContain("file locked")
-  })
-})

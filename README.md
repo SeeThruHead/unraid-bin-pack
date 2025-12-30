@@ -162,7 +162,7 @@ The project follows a **layered architecture** with strict dependency rules, bui
 ┌─────────────────────────────────────────────────────────────┐
 │                   Infrastructure Layer                      │
 │  GlobService, FileStatService, DiskStatsService,            │
-│  ShellService, SqlitePlanStorageService                     │
+│  ShellService                                               │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -260,9 +260,7 @@ src/
 │   ├── GlobService.ts               # File globbing (Bun.Glob)
 │   ├── FileStatService.ts           # File stat operations
 │   ├── DiskStatsService.ts          # Disk space queries
-│   ├── ShellService.ts              # Shell command execution
-│   ├── PlanStorageService.ts        # Plan storage interface & types
-│   └── SqlitePlanStorageService.ts  # SQLite plan storage implementation
+│   └── ShellService.ts              # Shell command execution
 ├── domain/
 │   ├── Disk.ts                      # Disk type
 │   ├── FileEntry.ts                 # File metadata type

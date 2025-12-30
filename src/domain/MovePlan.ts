@@ -1,12 +1,4 @@
-/**
- * MovePlan - represents a planned file move operation.
- */
-
-import type { FileEntry } from "./FileEntry"
-
-// =============================================================================
-// Types
-// =============================================================================
+import type { FileEntry} from "./FileEntry"
 
 export type MoveStatus = "pending" | "in_progress" | "completed" | "skipped" | "failed"
 
@@ -15,7 +7,7 @@ export interface FileMove {
   readonly targetDiskPath: string
   readonly destinationPath: string
   readonly status: MoveStatus
-  readonly reason?: string // For skipped/failed moves
+  readonly reason?: string
 }
 
 export interface MovePlan {
@@ -29,10 +21,6 @@ export interface MoveSummary {
   readonly movesPerDisk: ReadonlyMap<string, number>
   readonly bytesPerDisk: ReadonlyMap<string, number>
 }
-
-// =============================================================================
-// Constructors
-// =============================================================================
 
 export const createFileMove = (
   file: FileEntry,
@@ -49,10 +37,6 @@ export const skipMove = (move: FileMove, reason: string): FileMove => ({
   status: "skipped",
   reason,
 })
-
-// =============================================================================
-// Summary computation
-// =============================================================================
 
 export const computeSummary = (moves: readonly FileMove[]): MoveSummary => {
   const pendingMoves = moves.filter((m) => m.status === "pending")

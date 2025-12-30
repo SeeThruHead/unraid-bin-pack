@@ -1,12 +1,10 @@
-/**
- * Domain types for disk operations.
- */
-
 export interface Disk {
   readonly path: string
   readonly totalBytes: number
   readonly freeBytes: number
 }
+
+export type DiskStats = Disk
 
 export const usedBytes = (disk: Disk): number => disk.totalBytes - disk.freeBytes
 

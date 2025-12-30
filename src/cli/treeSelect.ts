@@ -1,8 +1,3 @@
-/**
- * Simple tree-view checkbox selector for directories
- * Supports 2 levels deep with arrow key navigation
- */
-
 import { Effect } from "effect"
 
 interface TreeNode {
@@ -20,15 +15,11 @@ interface TreeSelectState {
   cursor: number
 }
 
-/**
- * Scan directories up to 2 levels deep, merging paths across disks
- */
 async function scanDirectories(basePaths: string[]): Promise<TreeNode[]> {
   const nodeMap = new Map<string, TreeNode>()
 
   for (const basePath of basePaths) {
     try {
-      // Level 1: top-level directories
       const entries = await Array.fromAsync(
         new Bun.Glob("*").scan({ cwd: basePath, onlyFiles: false })
       )
@@ -39,7 +30,6 @@ async function scanDirectories(basePaths: string[]): Promise<TreeNode[]> {
         const fullPath = `${basePath}/${entry}`
         const nodePath = `/${entry}`
 
-        // Get or create node for this directory
         let node = nodeMap.get(nodePath)
         if (!node) {
           node = {
@@ -53,7 +43,6 @@ async function scanDirectories(basePaths: string[]): Promise<TreeNode[]> {
           nodeMap.set(nodePath, node)
         }
 
-        // Level 2: subdirectories (merge children across disks)
         try {
           const subEntries = await Array.fromAsync(
             new Bun.Glob("*").scan({ cwd: fullPath, onlyFiles: false })
@@ -87,21 +76,14 @@ async function scanDirectories(basePaths: string[]): Promise<TreeNode[]> {
           if (node.children.length === 0) {
             delete node.children
           }
-        } catch {
-          // Can't read subdirectories, keep existing children or none
-        }
+        } catch {}
       }
-    } catch {
-      // Can't read this base path, skip
-    }
+    } catch {}
   }
 
   return Array.from(nodeMap.values()).sort((a, b) => a.name.localeCompare(b.name))
 }
 
-/**
- * Flatten tree for display (only show expanded nodes)
- */
 function flattenTree(nodes: TreeNode[]): TreeNode[] {
   const flat: TreeNode[] = []
 
@@ -115,9 +97,6 @@ function flattenTree(nodes: TreeNode[]): TreeNode[] {
   return flat
 }
 
-/**
- * Render the tree view
- */
 function renderTree(state: TreeSelectState): string {
   const lines: string[] = []
 
@@ -147,11 +126,7 @@ function renderTree(state: TreeSelectState): string {
   return lines.join("\n")
 }
 
-/**
- * Run interactive tree selection
- */
 export async function selectDirectories(diskPaths: string[]): Promise<string[]> {
-  // Scan directories
   const nodes = await scanDirectories(diskPaths)
 
   if (nodes.length === 0) {
@@ -165,28 +140,22 @@ export async function selectDirectories(diskPaths: string[]): Promise<string[]> 
   }
 
   return new Promise((resolve) => {
-    // Clear screen and hide cursor
     process.stdout.write("\x1b[2J\x1b[0f\x1b[?25l")
 
-    // Render initial view
     process.stdout.write(renderTree(state))
 
-    // Set raw mode to capture key presses
     process.stdin.setRawMode(true)
     process.stdin.resume()
     process.stdin.setEncoding("utf8")
 
     const onData = (key: string) => {
-      // Handle key presses
       if (key === "\u0003" || key === "\u001b") {
-        // Ctrl+C or ESC - cancel
         cleanup()
         resolve([])
         return
       }
 
       if (key === "\r" || key === "\n") {
-        // Enter - confirm selection
         cleanup()
         const selected = collectSelected(state.nodes)
         resolve(selected)
@@ -194,32 +163,28 @@ export async function selectDirectories(diskPaths: string[]): Promise<string[]> 
       }
 
       if (key === " ") {
-        // Space - toggle selection
         const current = state.flatView[state.cursor]
         if (!current) return
 
         current.selected = !current.selected
 
-        // If parent is selected, select all children
         if (current.selected && current.children) {
           for (const child of current.children) {
             child.selected = true
           }
         }
 
-        // If parent is deselected, deselect all children
         if (!current.selected && current.children) {
           for (const child of current.children) {
             child.selected = false
           }
         }
 
-        // If child is selected, check if we should select parent
         if (current.level === 1 && current.selected) {
           const parent = state.nodes.find((n) =>
             n.children?.some((c) => c === current)
           )
-          if (parent && parent.children?.every((c) => c.selected)) {
+          if (parent?.children?.every((c) => c.selected)) {
             parent.selected = true
           }
         }
@@ -229,21 +194,18 @@ export async function selectDirectories(diskPaths: string[]): Promise<string[]> 
       }
 
       if (key === "\u001b[A") {
-        // Up arrow
         state.cursor = Math.max(0, state.cursor - 1)
         redraw()
         return
       }
 
       if (key === "\u001b[B") {
-        // Down arrow
         state.cursor = Math.min(state.flatView.length - 1, state.cursor + 1)
         redraw()
         return
       }
 
       if (key === "\u001b[C") {
-        // Right arrow - expand
         const current = state.flatView[state.cursor]
         if (!current) return
 
@@ -256,7 +218,6 @@ export async function selectDirectories(diskPaths: string[]): Promise<string[]> 
       }
 
       if (key === "\u001b[D") {
-        // Left arrow - collapse
         const current = state.flatView[state.cursor]
         if (!current) return
 
@@ -278,7 +239,7 @@ export async function selectDirectories(diskPaths: string[]): Promise<string[]> 
       process.stdin.setRawMode(false)
       process.stdin.pause()
       process.stdin.removeListener("data", onData)
-      process.stdout.write("\x1b[?25h") // Show cursor
+      process.stdout.write("\x1b[?25h")
       process.stdout.write("\n")
     }
 
@@ -286,9 +247,6 @@ export async function selectDirectories(diskPaths: string[]): Promise<string[]> 
   })
 }
 
-/**
- * Collect all selected paths from tree
- */
 function collectSelected(nodes: TreeNode[]): string[] {
   const selected: string[] = []
 
@@ -308,9 +266,6 @@ function collectSelected(nodes: TreeNode[]): string[] {
   return selected
 }
 
-/**
- * Effect wrapper for tree selection
- */
 export const selectDirectoriesEffect = (
   diskPaths: string[]
 ): Effect.Effect<string[], Error> =>
