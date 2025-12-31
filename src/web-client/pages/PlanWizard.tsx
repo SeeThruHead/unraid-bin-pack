@@ -57,7 +57,7 @@ export function PlanWizard() {
       const excludePatterns = mergePatterns(form.values.exclude, form.values.excludeCustom)
 
       const diskPaths = form.values.sourceDisk
-        ? [...form.values.destDisks, form.values.sourceDisk]
+        ? [...new Set([...form.values.destDisks, form.values.sourceDisk])]
         : form.values.destDisks
 
       const response = await client.plan.$post({
