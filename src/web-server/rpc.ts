@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { Effect, Layer, Array as EffectArray, pipe } from "effect"
 import { BunContext } from "@effect/platform-bun"
-import { createPlan, executePlanScript, readPlanScript, AppLive, type PlanConfig, type ApplyConfig } from "@core"
+import { createPlan, createPlanWithStream, executePlanScript, readPlanScript, AppLive, type PlanConfig, type ApplyConfig, type WorldViewSnapshot } from "@core"
 import { DiskServiceTag } from "@services/DiskService"
 import type { Dirent } from 'fs'
 import type { promises as fsPromises } from 'fs'
@@ -151,6 +151,64 @@ const rpc = new Hono()
     )
 
     return 'error' in result ? c.json(result, 500) : c.json(result)
+  })
+  .get('/plan-stream', async (c) => {
+    const diskPathsParam = c.req.query('diskPaths') || ''
+    const diskPaths = diskPathsParam.split(',').filter(p => p.trim())
+    const config: PlanConfig = {
+      src: c.req.query('src'),
+      dest: c.req.query('dest'),
+      minSpace: c.req.query('minSpace'),
+      minFileSize: c.req.query('minFileSize'),
+      pathFilter: c.req.query('pathFilter'),
+      include: c.req.query('include'),
+      exclude: c.req.query('exclude'),
+      minSplitSize: c.req.query('minSplitSize'),
+      moveAsFolderThreshold: c.req.query('moveAsFolderThreshold'),
+      debug: c.req.query('debug') === 'true',
+    }
+
+    const writeSSEMessage = (stream: SSEStreamAPI, type: string, data: Record<string, unknown>) =>
+      stream.writeSSE({
+        data: JSON.stringify({ type, ...data }),
+      })
+
+    return streamSSE(c, async (stream) => {
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          yield* Effect.promise(() => writeSSEMessage(stream, 'start', { message: 'Starting plan generation...' }))
+
+          const result = yield* pipe(
+            createPlanWithStream(diskPaths, config, (snapshot: WorldViewSnapshot) => {
+              // Stream each WorldView snapshot
+              writeSSEMessage(stream, 'worldview', {
+                step: snapshot.step,
+                action: snapshot.action,
+                worldView: snapshot.worldView,
+                metadata: snapshot.metadata,
+              })
+            }),
+            Effect.flatMap(planResult =>
+              Effect.gen(function* () {
+                const fs = yield* Effect.promise(() => import("fs/promises"))
+                yield* Effect.tryPromise(() => fs.writeFile("/config/plan.sh", planResult.script, "utf-8"))
+                yield* Effect.tryPromise(() => fs.chmod("/config/plan.sh", 0o755))
+                return planResult
+              })
+            ),
+            Effect.provide(WebLive)
+          )
+
+          yield* Effect.promise(() => writeSSEMessage(stream, 'complete', { result }))
+        }).pipe(
+          Effect.catchAll(error =>
+            Effect.gen(function* () {
+              yield* Effect.promise(() => writeSSEMessage(stream, 'error', { error: String(error) }))
+            })
+          )
+        )
+      )
+    })
   })
   .post('/apply', async (c) => {
     const body = await c.req.json<ApplyConfig>()

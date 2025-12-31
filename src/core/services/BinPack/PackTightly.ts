@@ -8,11 +8,25 @@ import { rankDisksByFullness } from "@domain/DiskRanking"
 import { applyFileFilters } from "@domain/FileFilter"
 import { optimizeMoveChains } from "@domain/MoveOptimization"
 
+export interface WorldViewSnapshot {
+  readonly step: number
+  readonly action: string
+  readonly worldView: WorldView
+  readonly metadata?: {
+    readonly sourceDisk?: string
+    readonly movedFile?: string
+    readonly targetDisk?: string
+    readonly movedCount?: number
+    readonly totalFilesOnDisk?: number
+  }
+}
+
 export interface PackTightlyOptions {
   readonly minSpaceBytes: number
   readonly minFileSizeBytes?: number
   readonly pathPrefixes?: readonly string[]
   readonly srcDiskPaths?: readonly string[]
+  readonly onWorldViewChange?: (snapshot: WorldViewSnapshot) => void
 }
 
 export interface ConsolidationResult {
@@ -22,7 +36,7 @@ export interface ConsolidationResult {
 
 /**
  * Find the best destination disk for a file.
- * Prefers fuller disks first (least free space) to concentrate free space.
+ * Prefers disks with MOST free space first to maximize chance of emptying source.
  * Excludes source disk and already-processed disks.
  */
 const findBestDestination = (
@@ -38,7 +52,7 @@ const findBestDestination = (
       !processedDisks.has(disk.path) &&
       disk.freeBytes - minSpaceBytes >= file.sizeBytes
     )
-    .sort((a, b) => a.freeBytes - b.freeBytes) // Sort by LEAST free space (fill fuller disks first)
+    .sort((a, b) => b.freeBytes - a.freeBytes) // Sort by MOST free space first
 
   return candidates.length > 0 ? candidates[0]!.path : null
 }
@@ -48,6 +62,15 @@ export const packTightly = (
   options: PackTightlyOptions
 ): Effect.Effect<ConsolidationResult, never> =>
   Effect.gen(function* () {
+    let stepCounter = 0
+
+    // Emit initial WorldView
+    options.onWorldViewChange?.({
+      step: stepCounter++,
+      action: "Initial WorldView",
+      worldView,
+    })
+
     // Apply file filters
     const beforeFilterCount = worldView.files.length
     const filteredFiles = applyFileFilters(worldView.files, {
@@ -64,6 +87,15 @@ export const packTightly = (
     let currentWorldView: WorldView = {
       ...worldView,
       files: filteredFiles,
+    }
+
+    // Emit filtered WorldView
+    if (filteredCount > 0) {
+      options.onWorldViewChange?.({
+        step: stepCounter++,
+        action: `Filtered out ${filteredCount} files`,
+        worldView: currentWorldView,
+      })
     }
 
     const processedDisks = new Set<string>()
@@ -107,6 +139,17 @@ export const packTightly = (
 
       yield* Effect.logDebug(`  Files on disk: ${filesOnDisk.map(f => `${f.relativePath} (${(f.sizeBytes / 1024 / 1024).toFixed(0)} MB)`).join(', ') || 'none'}`)
 
+      // Emit start processing disk
+      options.onWorldViewChange?.({
+        step: stepCounter++,
+        action: `Start processing disk ${sourceDiskPath}`,
+        worldView: currentWorldView,
+        metadata: {
+          sourceDisk: sourceDiskPath,
+          totalFilesOnDisk: filesOnDisk.length,
+        },
+      })
+
       let movedCount = 0
 
       // Try to move files off this disk until we can't move any more
@@ -135,6 +178,20 @@ export const packTightly = (
 
         // Apply move to WorldView (updates disk states and file locations)
         currentWorldView = applyMove(currentWorldView, move)
+
+        // Emit after move
+        options.onWorldViewChange?.({
+          step: stepCounter++,
+          action: `Moved file: ${file.relativePath}`,
+          worldView: currentWorldView,
+          metadata: {
+            sourceDisk: sourceDiskPath,
+            targetDisk: destination,
+            movedFile: file.relativePath,
+            movedCount,
+            totalFilesOnDisk: filesOnDisk.length,
+          },
+        })
       }
 
       if (movedCount === filesOnDisk.length && filesOnDisk.length > 0) {
@@ -147,6 +204,24 @@ export const packTightly = (
 
       // Mark this disk as processed
       processedDisks.add(sourceDiskPath)
+
+      // Emit end processing disk
+      const statusMsg = movedCount === filesOnDisk.length && filesOnDisk.length > 0
+        ? `${sourceDiskPath} is now EMPTY`
+        : movedCount > 0
+        ? `${sourceDiskPath} partially emptied (${movedCount}/${filesOnDisk.length})`
+        : `No files could be moved from ${sourceDiskPath}`
+
+      options.onWorldViewChange?.({
+        step: stepCounter++,
+        action: `Finished processing: ${statusMsg}`,
+        worldView: currentWorldView,
+        metadata: {
+          sourceDisk: sourceDiskPath,
+          movedCount,
+          totalFilesOnDisk: filesOnDisk.length,
+        },
+      })
     }
 
     // Optimize move chains (collapse disk8→disk7→disk6 into disk8→disk6)

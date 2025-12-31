@@ -1,8 +1,10 @@
-import { Stack, Text, Badge, Group, Button, Alert } from '@mantine/core'
+import { Stack, Text, Badge, Group, Button, Alert, Accordion, Paper } from '@mantine/core'
 import { IconAlertCircle } from '@tabler/icons-react'
 import { ConfigCard } from './components/ConfigCard'
 import { PatternBadges } from './components/PatternBadges'
+import { WorldViewAudit } from './components/WorldViewAudit'
 import type { PlanForm, PlanResponse } from '../../types'
+import type { WorldViewSnapshot } from '@core'
 
 const parseCustomPatterns = (customString: string): string[] =>
   customString ? customString.split(',').map((s) => s.trim()) : []
@@ -16,9 +18,10 @@ interface ReviewPageProps {
   onCreatePlan: () => void
   isCreatingPlan: boolean
   planError?: PlanResponse | { error: string } | null
+  worldViewSnapshots: WorldViewSnapshot[]
 }
 
-export function ReviewPage({ form, onBack, onCreatePlan, isCreatingPlan, planError }: ReviewPageProps) {
+export function ReviewPage({ form, onBack, onCreatePlan, isCreatingPlan, planError, worldViewSnapshots }: ReviewPageProps) {
   const includePatterns = mergePatterns(form.values.include, form.values.includeCustom)
   const excludePatterns = mergePatterns(form.values.exclude, form.values.excludeCustom)
 
@@ -74,9 +77,21 @@ export function ReviewPage({ form, onBack, onCreatePlan, isCreatingPlan, planErr
         {form.values.force && <Badge color="red">Force Mode Enabled</Badge>}
       </ConfigCard>
 
+      {worldViewSnapshots.length > 0 && (
+        <Paper p="md" withBorder>
+          <Text size="lg" fw={600} mb="md">WorldView Audit Trail</Text>
+          <Text size="sm" c="dimmed" mb="md">
+            Live algorithm state changes during plan creation
+          </Text>
+          <WorldViewAudit snapshots={worldViewSnapshots} />
+        </Paper>
+      )}
+
       <Group justify="space-between" mt="xl">
         <Button variant="default" onClick={onBack}>Back</Button>
-        <Button onClick={onCreatePlan} loading={isCreatingPlan}>Create Plan</Button>
+        <Button onClick={onCreatePlan} loading={isCreatingPlan}>
+          {isCreatingPlan ? 'Creating Plan...' : 'Create Plan'}
+        </Button>
       </Group>
     </Stack>
   )

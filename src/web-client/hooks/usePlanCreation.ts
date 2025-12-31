@@ -1,0 +1,117 @@
+import { useState, useRef } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import type { WorldViewSnapshot } from '@core'
+import type { PlanResponse } from '../types'
+
+interface PlanConfig {
+  diskPaths: string[]
+  sourceDisk: string
+  destDisks: string[]
+  pathFilters: string[]
+  minSpace: string
+  minFileSize: string
+  include: string[]
+  exclude: string[]
+  minSplitSize: string
+  moveAsFolderThreshold: string
+  debug: boolean
+}
+
+interface PlanCreationOptions {
+  onSuccess?: (data: PlanResponse & { selectedDiskPaths: string[] }) => void
+}
+
+export function usePlanCreation(options?: PlanCreationOptions) {
+  const [worldViewSnapshots, setWorldViewSnapshots] = useState<WorldViewSnapshot[]>([])
+  const eventSourceRef = useRef<EventSource | null>(null)
+
+  const createPlanMutation = useMutation<
+    (PlanResponse & { selectedDiskPaths: string[] }) | { error: string },
+    Error,
+    PlanConfig
+  >({
+    mutationFn: async (config: PlanConfig): Promise<(PlanResponse & { selectedDiskPaths: string[] }) | { error: string }> => {
+      // Clear previous snapshots
+      setWorldViewSnapshots([])
+
+      // Close any existing event source
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+      }
+
+      const diskPaths = config.sourceDisk
+        ? [...new Set([...config.destDisks, config.sourceDisk])]
+        : config.destDisks
+
+      // Build query params for streaming endpoint
+      const params = new URLSearchParams({
+        diskPaths: diskPaths.join(','),
+        ...(config.sourceDisk && { src: config.sourceDisk }),
+        ...(config.destDisks.length > 0 && { dest: config.destDisks.join(',') }),
+        minSpace: config.minSpace,
+        minFileSize: config.minFileSize,
+        ...(config.pathFilters.length > 0 && { pathFilter: config.pathFilters.join(',') }),
+        ...(config.include.length > 0 && { include: config.include.join(',') }),
+        ...(config.exclude.length > 0 && { exclude: config.exclude.join(',') }),
+        minSplitSize: config.minSplitSize,
+        moveAsFolderThreshold: config.moveAsFolderThreshold,
+        debug: config.debug.toString(),
+      })
+
+      // Use EventSource for streaming
+      return new Promise((resolve, reject) => {
+        const eventSource = new EventSource(`/api/plan-stream?${params.toString()}`)
+        eventSourceRef.current = eventSource
+
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data)
+
+            if (data.type === 'worldview') {
+              // Add WorldView snapshot
+              setWorldViewSnapshots(prev => [...prev, {
+                step: data.step,
+                action: data.action,
+                worldView: data.worldView,
+                metadata: data.metadata,
+              }])
+            } else if (data.type === 'complete') {
+              // Plan is complete
+              eventSource.close()
+              eventSourceRef.current = null
+              resolve({
+                ...data.result,
+                selectedDiskPaths: diskPaths
+              })
+            } else if (data.type === 'error') {
+              eventSource.close()
+              eventSourceRef.current = null
+              reject(new Error(data.error))
+            }
+          } catch (error) {
+            console.error('Error parsing SSE message:', error)
+          }
+        }
+
+        eventSource.onerror = (error) => {
+          console.error('EventSource error:', error)
+          eventSource.close()
+          eventSourceRef.current = null
+          reject(new Error('Failed to connect to plan stream'))
+        }
+      })
+    },
+    onSuccess: (data) => {
+      if (!('error' in data)) {
+        options?.onSuccess?.(data)
+      }
+    },
+  })
+
+  return {
+    createPlan: createPlanMutation.mutate,
+    isPending: createPlanMutation.isPending,
+    data: createPlanMutation.data,
+    worldViewSnapshots,
+  }
+}
