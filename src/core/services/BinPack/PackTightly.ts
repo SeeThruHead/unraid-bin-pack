@@ -11,13 +11,16 @@ import { optimizeMoveChains } from "@domain/MoveOptimization"
 export interface WorldViewSnapshot {
   readonly step: number
   readonly action: string
-  readonly worldView: WorldView
   readonly metadata?: {
     readonly sourceDisk?: string
-    readonly movedFile?: string
+    readonly sourceFreeGB?: number
     readonly targetDisk?: string
+    readonly targetFreeGB?: number
+    readonly movedFile?: string
+    readonly fileSizeMB?: number
     readonly movedCount?: number
     readonly totalFilesOnDisk?: number
+    readonly reason?: string  // Why something didn't happen
   }
 }
 
@@ -64,11 +67,18 @@ export const packTightly = (
   Effect.gen(function* () {
     let stepCounter = 0
 
-    // Emit initial WorldView
+    // Emit initial state
+    const totalFiles = worldView.files.length
+    const diskSummary = worldView.disks.map(d =>
+      `${d.path}: ${((d.freeBytes / 1024 / 1024 / 1024).toFixed(1))}GB free`
+    ).join(', ')
+
     options.onWorldViewChange?.({
       step: stepCounter++,
-      action: "Initial WorldView",
-      worldView,
+      action: `Start: ${totalFiles} files across ${worldView.disks.length} disks`,
+      metadata: {
+        reason: diskSummary
+      }
     })
 
     // Apply file filters
@@ -81,21 +91,16 @@ export const packTightly = (
     const filteredCount = beforeFilterCount - filteredFiles.length
     if (filteredCount > 0) {
       yield* Effect.logDebug(`Filtered out ${filteredCount} files`)
+      options.onWorldViewChange?.({
+        step: stepCounter++,
+        action: `Filtered ${filteredCount} files (size/path filters)`,
+      })
     }
 
     // Start with filtered WorldView
     let currentWorldView: WorldView = {
       ...worldView,
       files: filteredFiles,
-    }
-
-    // Emit filtered WorldView
-    if (filteredCount > 0) {
-      options.onWorldViewChange?.({
-        step: stepCounter++,
-        action: `Filtered out ${filteredCount} files`,
-        worldView: currentWorldView,
-      })
     }
 
     const processedDisks = new Set<string>()
@@ -140,13 +145,15 @@ export const packTightly = (
       yield* Effect.logDebug(`  Files on disk: ${filesOnDisk.map(f => `${f.relativePath} (${(f.sizeBytes / 1024 / 1024).toFixed(0)} MB)`).join(', ') || 'none'}`)
 
       // Emit start processing disk
+      const sourceDiskState = currentWorldView.disks.find(d => d.path === sourceDiskPath)!
       options.onWorldViewChange?.({
         step: stepCounter++,
-        action: `Start processing disk ${sourceDiskPath}`,
-        worldView: currentWorldView,
+        action: `Processing ${sourceDiskPath}`,
         metadata: {
           sourceDisk: sourceDiskPath,
+          sourceFreeGB: sourceDiskState.freeBytes / 1024 / 1024 / 1024,
           totalFilesOnDisk: filesOnDisk.length,
+          reason: `${filesOnDisk.length} files to move (${((sourceDiskState.freeBytes / 1024 / 1024 / 1024).toFixed(1))}GB free)`
         },
       })
 
@@ -164,6 +171,18 @@ export const packTightly = (
 
         if (!destination) {
           yield* Effect.logDebug(`    ⊘ ${file.relativePath} (${(file.sizeBytes / 1024 / 1024).toFixed(0)} MB): Cannot fit anywhere`)
+
+          // Emit why file couldn't be moved
+          options.onWorldViewChange?.({
+            step: stepCounter++,
+            action: `❌ Can't move ${file.relativePath}`,
+            metadata: {
+              sourceDisk: sourceDiskPath,
+              movedFile: file.relativePath,
+              fileSizeMB: file.sizeBytes / 1024 / 1024,
+              reason: "No destination disk has enough free space"
+            },
+          })
           continue
         }
 
@@ -180,14 +199,19 @@ export const packTightly = (
         currentWorldView = applyMove(currentWorldView, move)
 
         // Emit after move
+        const updatedSourceDisk = currentWorldView.disks.find(d => d.path === sourceDiskPath)!
+        const updatedTargetDisk = currentWorldView.disks.find(d => d.path === destination)!
+
         options.onWorldViewChange?.({
           step: stepCounter++,
-          action: `Moved file: ${file.relativePath}`,
-          worldView: currentWorldView,
+          action: `✓ ${file.relativePath} → ${destination}`,
           metadata: {
             sourceDisk: sourceDiskPath,
+            sourceFreeGB: updatedSourceDisk.freeBytes / 1024 / 1024 / 1024,
             targetDisk: destination,
+            targetFreeGB: updatedTargetDisk.freeBytes / 1024 / 1024 / 1024,
             movedFile: file.relativePath,
+            fileSizeMB: file.sizeBytes / 1024 / 1024,
             movedCount,
             totalFilesOnDisk: filesOnDisk.length,
           },
@@ -206,18 +230,21 @@ export const packTightly = (
       processedDisks.add(sourceDiskPath)
 
       // Emit end processing disk
-      const statusMsg = movedCount === filesOnDisk.length && filesOnDisk.length > 0
-        ? `${sourceDiskPath} is now EMPTY`
+      const finalSourceDisk = currentWorldView.disks.find(d => d.path === sourceDiskPath)!
+      const isEmpty = movedCount === filesOnDisk.length && filesOnDisk.length > 0
+      const statusEmoji = isEmpty ? "🎉" : movedCount > 0 ? "⚠️" : "❌"
+      const statusMsg = isEmpty
+        ? `EMPTY!`
         : movedCount > 0
-        ? `${sourceDiskPath} partially emptied (${movedCount}/${filesOnDisk.length})`
-        : `No files could be moved from ${sourceDiskPath}`
+        ? `Partially emptied (${movedCount}/${filesOnDisk.length})`
+        : `Nothing moved`
 
       options.onWorldViewChange?.({
         step: stepCounter++,
-        action: `Finished processing: ${statusMsg}`,
-        worldView: currentWorldView,
+        action: `${statusEmoji} ${sourceDiskPath}: ${statusMsg}`,
         metadata: {
           sourceDisk: sourceDiskPath,
+          sourceFreeGB: finalSourceDisk.freeBytes / 1024 / 1024 / 1024,
           movedCount,
           totalFilesOnDisk: filesOnDisk.length,
         },

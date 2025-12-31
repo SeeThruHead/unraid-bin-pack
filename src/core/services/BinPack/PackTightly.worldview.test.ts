@@ -55,15 +55,15 @@ describe("PackTightly WorldView Snapshots", () => {
     expect(snapshots.length).toBeGreaterThan(0)
 
     // First snapshot should be initial state
-    expect(snapshots[0]?.action).toBe("Initial WorldView")
+    expect(snapshots[0]?.action).toContain("Start:")
     expect(snapshots[0]?.step).toBe(0)
 
     // Should have snapshots for processing disk
-    const processingSnapshots = snapshots.filter(s => s.action.includes("Start processing"))
+    const processingSnapshots = snapshots.filter(s => s.action.includes("Processing"))
     expect(processingSnapshots.length).toBeGreaterThan(0)
 
-    // Should have snapshots for moved files
-    const moveSnapshots = snapshots.filter(s => s.action.includes("Moved file"))
+    // Should have snapshots for moved files (using new format with ✓ or →)
+    const moveSnapshots = snapshots.filter(s => s.action.includes("✓") || s.action.includes("→"))
     expect(moveSnapshots.length).toBeGreaterThan(0)
 
     // Verify metadata is included
@@ -71,25 +71,17 @@ describe("PackTightly WorldView Snapshots", () => {
     expect(moveSnapshot?.metadata?.sourceDisk).toBeDefined()
     expect(moveSnapshot?.metadata?.targetDisk).toBeDefined()
     expect(moveSnapshot?.metadata?.movedFile).toBeDefined()
-
-    // Verify WorldView state changes
-    const lastSnapshot = snapshots[snapshots.length - 1]
-    expect(lastSnapshot?.worldView.disks).toBeDefined()
-    expect(lastSnapshot?.worldView.files).toBeDefined()
+    expect(moveSnapshot?.metadata?.fileSizeMB).toBeDefined()
+    expect(moveSnapshot?.metadata?.sourceFreeGB).toBeDefined()
+    expect(moveSnapshot?.metadata?.targetFreeGB).toBeDefined()
 
     // Log all snapshots for debugging
-    console.log("\n=== WorldView Snapshots ===")
-    snapshots.forEach((snapshot, idx) => {
+    console.log("\n=== Slim WorldView Snapshots ===")
+    snapshots.forEach((snapshot) => {
       console.log(`\nStep ${snapshot.step}: ${snapshot.action}`)
       if (snapshot.metadata) {
         console.log(`  Metadata:`, JSON.stringify(snapshot.metadata, null, 2))
       }
-      console.log(`  Disks:`)
-      snapshot.worldView.disks.forEach(disk => {
-        const filesOnDisk = snapshot.worldView.files.filter(f => f.diskPath === disk.path).length
-        const usedPct = ((disk.totalBytes - disk.freeBytes) / disk.totalBytes * 100).toFixed(1)
-        console.log(`    ${disk.path}: ${filesOnDisk} files, ${usedPct}% used, ${(disk.freeBytes / 1024 / 1024).toFixed(0)}MB free`)
-      })
     })
 
     console.log("\n=== Final Result ===")
@@ -136,8 +128,8 @@ describe("PackTightly WorldView Snapshots", () => {
       })
     )
 
-    // Count move snapshots
-    const moveSnapshots = snapshots.filter(s => s.action.includes("Moved file"))
+    // Count move snapshots (new format uses ✓)
+    const moveSnapshots = snapshots.filter(s => s.action.includes("✓"))
 
     // Should have one snapshot per file move
     expect(moveSnapshots.length).toBeGreaterThan(0)
@@ -147,39 +139,28 @@ describe("PackTightly WorldView Snapshots", () => {
       expect(snapshots[i]!.step).toBeGreaterThan(snapshots[i - 1]!.step)
     }
 
-    // Verify disk states update correctly
+    // Verify metadata includes free space info
     const firstMoveSnapshot = moveSnapshots[0]
-    if (firstMoveSnapshot) {
-      const sourceDisk = firstMoveSnapshot.worldView.disks.find(
-        d => d.path === firstMoveSnapshot.metadata?.sourceDisk
-      )
-      const targetDisk = firstMoveSnapshot.worldView.disks.find(
-        d => d.path === firstMoveSnapshot.metadata?.targetDisk
-      )
-
-      // Source disk should have more free space after move
-      expect(sourceDisk?.freeBytes).toBeGreaterThan(0)
-
-      // Target disk should have less free space after move
-      expect(targetDisk?.freeBytes).toBeGreaterThan(0)
+    if (firstMoveSnapshot?.metadata) {
+      expect(firstMoveSnapshot.metadata.sourceFreeGB).toBeGreaterThan(0)
+      expect(firstMoveSnapshot.metadata.targetFreeGB).toBeGreaterThan(0)
     }
   })
 
-  test("should track files moving between disks correctly", async () => {
+  test("should show why files can't be moved", async () => {
     const snapshots: WorldViewSnapshot[] = []
-    const fileName = "test-file.mkv"
 
     const initialWorldView: WorldView = {
       disks: [
         { path: "/mnt/disk1", totalBytes: 1000000000, freeBytes: 100000000 },
-        { path: "/mnt/disk2", totalBytes: 1000000000, freeBytes: 900000000 },
+        { path: "/mnt/disk2", totalBytes: 1000000000, freeBytes: 50000000 }, // Not enough space
       ],
       files: [
         {
           diskPath: "/mnt/disk1",
-          relativePath: fileName,
-          absolutePath: `/mnt/disk1/${fileName}`,
-          sizeBytes: 500000000,
+          relativePath: "huge-file.mkv",
+          absolutePath: "/mnt/disk1/huge-file.mkv",
+          sizeBytes: 800000000, // Too big for disk2
         },
       ],
     }
@@ -193,18 +174,12 @@ describe("PackTightly WorldView Snapshots", () => {
       })
     )
 
-    // Find the initial and final snapshots
-    const initialSnapshot = snapshots[0]
-    const finalSnapshot = snapshots[snapshots.length - 1]
+    // Should have a "can't move" snapshot with reason
+    const cantMoveSnapshots = snapshots.filter(s => s.action.includes("❌"))
+    expect(cantMoveSnapshots.length).toBeGreaterThan(0)
 
-    // Initially, file should be on disk1
-    const initialFile = initialSnapshot?.worldView.files.find(f => f.relativePath === fileName)
-    expect(initialFile?.diskPath).toBe("/mnt/disk1")
-
-    // After moves, file should be on disk2 (if it was moved)
-    const finalFile = finalSnapshot?.worldView.files.find(f => f.relativePath === fileName)
-    if (snapshots.some(s => s.action.includes("Moved file"))) {
-      expect(finalFile?.diskPath).not.toBe(initialFile?.diskPath)
-    }
+    const cantMove = cantMoveSnapshots[0]
+    expect(cantMove?.metadata?.reason).toBeDefined()
+    expect(cantMove?.metadata?.reason).toContain("No destination")
   })
 })
