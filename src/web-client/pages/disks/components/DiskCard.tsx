@@ -14,7 +14,6 @@ interface DiskCardProps {
 export function DiskCard({ disk, checked, onChange }: DiskCardProps) {
   const usedPercent = calculateUsedPercent(disk.totalBytes, disk.freeBytes);
   const freeGB = formatGB(disk.freeBytes);
-  const totalGB = formatGB(disk.totalBytes);
 
   return (
     <Card
