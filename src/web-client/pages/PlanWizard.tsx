@@ -10,6 +10,7 @@ import { ResultsPage } from "./results";
 import { usePlanStore } from "../store/planStore";
 import type { RpcRoutes } from "../../web-server/rpc";
 import type { PlanResponse } from "../types";
+import { throwMutationError } from "../lib/reactQueryUtils";
 
 const client = hc<RpcRoutes>("/api");
 
@@ -34,12 +35,8 @@ export function PlanWizard() {
   const activeStep = ROUTES.indexOf(location as (typeof ROUTES)[number]);
   const { values } = usePlanStore();
 
-  const createPlanMutation = useMutation<
-    (PlanResponse & { selectedDiskPaths: string[] }) | { error: string }
-  >({
-    mutationFn: async (): Promise<
-      (PlanResponse & { selectedDiskPaths: string[] }) | { error: string }
-    > => {
+  const createPlanMutation = useMutation<PlanResponse & { selectedDiskPaths: string[] }, Error>({
+    mutationFn: async (): Promise<PlanResponse & { selectedDiskPaths: string[] }> => {
       const includePatterns = mergePatterns(values.include, values.includeCustom);
       const excludePatterns = mergePatterns(values.exclude, values.excludeCustom);
 
@@ -68,7 +65,7 @@ export function PlanWizard() {
       const planResponse = (await response.json()) as PlanResponse | { error: string };
 
       if ("error" in planResponse) {
-        return planResponse;
+        throwMutationError(planResponse.error);
       }
 
       return {
@@ -77,9 +74,7 @@ export function PlanWizard() {
       };
     },
     onSuccess: (data) => {
-      if (!("error" in data)) {
-        setLocation("/results");
-      }
+      setLocation("/results");
     }
   });
 
@@ -146,7 +141,7 @@ export function PlanWizard() {
               onBack={handleBack}
               onCreatePlan={() => createPlanMutation.mutate()}
               isCreatingPlan={createPlanMutation.isPending}
-              planError={createPlanMutation.data}
+              planError={createPlanMutation.error?.message}
             />
           </Route>
           <Route path="/results">

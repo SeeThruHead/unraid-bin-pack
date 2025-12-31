@@ -17,7 +17,7 @@ interface ReviewPageProps {
   onBack: () => void;
   onCreatePlan: () => void;
   isCreatingPlan: boolean;
-  planError?: PlanResponse | { error: string } | null;
+  planError?: string | null;
 }
 
 export function ReviewPage({ onBack, onCreatePlan, isCreatingPlan, planError }: ReviewPageProps) {
@@ -27,9 +27,9 @@ export function ReviewPage({ onBack, onCreatePlan, isCreatingPlan, planError }: 
 
   return (
     <Stack gap="md" mt="md">
-      {planError && "error" in planError && (
+      {planError && (
         <Alert icon={<IconAlertCircle size={16} />} title="Plan Creation Failed" color="red">
-          {planError.error}
+          {planError}
         </Alert>
       )}
 

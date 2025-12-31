@@ -1,5 +1,4 @@
 import { useState, useCallback } from "react";
-import { Redirect } from "wouter";
 import { Stack, Alert, Accordion, Text, Code, Loader, Center } from "@mantine/core";
 import { IconCheck } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -16,7 +15,7 @@ type ExecutionResult = {
 };
 
 interface ResultsPageProps {
-  result: (PlanResponse & { selectedDiskPaths?: string[] }) | { error: string } | null;
+  result: (PlanResponse & { selectedDiskPaths?: string[] }) | null;
 }
 
 export function ResultsPage({ result }: ResultsPageProps) {
@@ -30,7 +29,6 @@ export function ResultsPage({ result }: ResultsPageProps) {
   const handleExecutionComplete = useCallback(
     (execResult: { result: ExecutionResult; dryRun: boolean }) => {
       setExecutionResult(execResult);
-      // Invalidate disk stats when actual execution completes (not dry run)
       if (!execResult.dryRun) {
         queryClient.invalidateQueries({ queryKey: ["disks"] });
       }
@@ -38,18 +36,12 @@ export function ResultsPage({ result }: ResultsPageProps) {
     [queryClient]
   );
 
-  // Show loading state while waiting for result
   if (!result) {
     return (
       <Center h={200}>
         <Loader color="yellow" />
       </Center>
     );
-  }
-
-  // If there's an error, redirect back
-  if ("error" in result) {
-    return <Redirect to="/" />;
   }
 
   const selectedDiskPaths = result.selectedDiskPaths || [];
