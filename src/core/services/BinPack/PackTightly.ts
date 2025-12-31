@@ -21,11 +21,13 @@ export interface ConsolidationResult {
 type AvailableSpaceMap = Map<string, number>
 type EmptiedDisksSet = Set<string>
 type DestinationDisksSet = Set<string>
+type SourceDisksSet = Set<string>
 
 interface PackingState {
   availableSpace: AvailableSpaceMap
   emptiedDisks: EmptiedDisksSet
   destinationDisks: DestinationDisksSet
+  sourceDisks: SourceDisksSet
   allMoves: FileMove[]
 }
 
@@ -34,11 +36,14 @@ const findBestDestination = (
   availableSpace: AvailableSpaceMap,
   sourceDiskPath: string,
   emptiedDisks: EmptiedDisksSet,
+  sourceDisks: SourceDisksSet,
   minSpaceBytes: number
 ): string | null => {
   const candidates = [...availableSpace.entries()]
     .filter(([diskPath]) =>
-      diskPath !== sourceDiskPath && !emptiedDisks.has(diskPath)
+      diskPath !== sourceDiskPath &&
+      !emptiedDisks.has(diskPath) &&
+      !sourceDisks.has(diskPath) // Don't send files to disks we're trying to empty!
     )
     .filter(([_, freeBytes]) =>
       freeBytes - minSpaceBytes >= file.sizeBytes
@@ -86,6 +91,7 @@ export const packTightly = (
       availableSpace: new Map(worldView.disks.map(d => [d.path, d.freeBytes])),
       emptiedDisks: new Set<string>(),
       destinationDisks: new Set<string>(),
+      sourceDisks: new Set<string>(),
       allMoves: []
     }
 
@@ -106,6 +112,10 @@ export const packTightly = (
           return state
         }
 
+        // Mark this disk as a source (being emptied) so it won't receive files later
+        const newSourceDisks = new Set(state.sourceDisks)
+        newSourceDisks.add(sourceDisk.path)
+
         // Check if any file on this disk can be moved
         const canMoveAnyFile = filesOnDisk.some(file =>
           findBestDestination(
@@ -113,6 +123,7 @@ export const packTightly = (
             state.availableSpace,
             sourceDisk.path,
             state.emptiedDisks,
+            newSourceDisks,
             options.minSpaceBytes
           ) !== null
         )
@@ -120,7 +131,7 @@ export const packTightly = (
         if (!canMoveAnyFile) {
           yield* Effect.logDebug(`  ❌ SKIPPING ${sourceDisk.path}: No files can fit on any available destination`)
           yield* Effect.logDebug(`     Available destinations: ${[...state.availableSpace.entries()]
-            .filter(([p]) => p !== sourceDisk.path && !state.emptiedDisks.has(p))
+            .filter(([p]) => p !== sourceDisk.path && !state.emptiedDisks.has(p) && !newSourceDisks.has(p))
             .map(([p, free]) => `${p} (${((free - options.minSpaceBytes) / 1024 / 1024).toFixed(0)} MB available)`)
             .join(', ')}`)
           return state
@@ -130,13 +141,14 @@ export const packTightly = (
 
         const updatedState = yield* Effect.reduce(
           filesOnDisk,
-          state,
+          { ...state, sourceDisks: newSourceDisks },
           (fileState, file) => Effect.gen(function* () {
             const destination = findBestDestination(
               file,
               fileState.availableSpace,
               sourceDisk.path,
               fileState.emptiedDisks,
+              fileState.sourceDisks,
               options.minSpaceBytes
             )
 
