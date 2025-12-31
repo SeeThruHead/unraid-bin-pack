@@ -35,6 +35,7 @@ export default [
       // Functional programming rules (testing one by one)
       "functional/no-let": "error",
       "functional/no-throw-statements": "error",
+      "functional/prefer-tacit": "error",
 
       // No comments rule
       "no-comments/disallowComments": "error",
