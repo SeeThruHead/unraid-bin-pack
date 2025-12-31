@@ -83,9 +83,8 @@ export function PlanWizard() {
     }
   });
 
-  // Reset plan when navigating away from review page
   useEffect(() => {
-    if (location !== "/review" && createPlanMutation.data) {
+    if (location !== "/review" && location !== "/results" && createPlanMutation.data) {
       createPlanMutation.reset();
     }
   }, [location, createPlanMutation]);
