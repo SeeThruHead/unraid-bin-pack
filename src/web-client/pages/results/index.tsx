@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { Stack, Alert, Accordion, Text, Code, Loader, Center } from "@mantine/core";
-import { IconCheck } from "@tabler/icons-react";
+import { IconCheck, IconAlertCircle } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { PlanSummary } from "./components/PlanSummary";
 import { DiskStatsTable } from "./components/DiskStatsTable";
@@ -16,9 +16,12 @@ type ExecutionResult = {
 
 interface ResultsPageProps {
   result: (PlanResponse & { selectedDiskPaths?: string[] }) | null;
+  isError?: boolean;
+  error?: Error | null;
 }
 
-export function ResultsPage({ result }: ResultsPageProps) {
+export function ResultsPage({ result, isError, error }: ResultsPageProps) {
+  console.log("ResultsPage render:", { result, isError, error });
   const queryClient = useQueryClient();
   const [actualDiskSpace, setActualDiskSpace] = useState<DiskResponse[]>([]);
   const [executionResult, setExecutionResult] = useState<{
@@ -35,6 +38,22 @@ export function ResultsPage({ result }: ResultsPageProps) {
     },
     [queryClient]
   );
+
+  if (isError && error) {
+    console.error("Error in ResultsPage:", error);
+    return (
+      <Stack gap="lg" mt="md">
+        <Alert icon={<IconAlertCircle size={16} />} title="Plan Creation Failed" color="red">
+          <Text size="sm" mb="xs">
+            {error.message}
+          </Text>
+          <Text size="xs" c="dimmed">
+            Check the browser console for more details.
+          </Text>
+        </Alert>
+      </Stack>
+    );
+  }
 
   if (!result) {
     return (
