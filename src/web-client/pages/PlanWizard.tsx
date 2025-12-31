@@ -1,11 +1,16 @@
 import { Route, Switch, useLocation } from 'wouter'
 import { Paper, Title, Text, Stack, Button, Group, Stepper } from '@mantine/core'
 import { useForm } from '@mantine/form'
-import { usePlanCreation } from '../hooks/usePlanCreation'
+import { useMutation } from '@tanstack/react-query'
+import { hc } from 'hono/client'
 import { DisksPage } from './disks'
 import { OptionsPage } from './options'
 import { ReviewPage } from './review'
 import { ResultsPage } from './results'
+import type { RpcRoutes } from '../../web-server/rpc'
+import type { PlanResponse } from '../types'
+
+const client = hc<RpcRoutes>('/api')
 
 const DEFAULT_FORM_VALUES = {
   destDisks: [] as string[],
@@ -46,34 +51,50 @@ export function PlanWizard() {
     initialValues: DEFAULT_FORM_VALUES,
   })
 
-  const { createPlan, isPending, data, worldViewSnapshots } = usePlanCreation({
-    onSuccess: () => {
-      setLocation('/results')
-    }
+  const createPlanMutation = useMutation<(PlanResponse & { selectedDiskPaths: string[] }) | { error: string }>({
+    mutationFn: async (): Promise<(PlanResponse & { selectedDiskPaths: string[] }) | { error: string }> => {
+      const includePatterns = mergePatterns(form.values.include, form.values.includeCustom)
+      const excludePatterns = mergePatterns(form.values.exclude, form.values.excludeCustom)
+
+      const diskPaths = form.values.sourceDisk
+        ? [...new Set([...form.values.destDisks, form.values.sourceDisk])]
+        : form.values.destDisks
+
+      const response = await client.plan.$post({
+        json: {
+          diskPaths,
+          config: {
+            src: orUndefined(form.values.sourceDisk),
+            dest: joinIfNotEmpty(form.values.destDisks),
+            minSpace: form.values.minSpace,
+            minFileSize: form.values.minFileSize,
+            pathFilter: joinIfNotEmpty(form.values.pathFilters),
+            include: joinIfNotEmpty(includePatterns),
+            exclude: joinIfNotEmpty(excludePatterns),
+            minSplitSize: form.values.minSplitSize,
+            moveAsFolderThreshold: form.values.moveAsFolderThreshold,
+            debug: form.values.debug,
+          }
+        }
+      })
+
+      const planResponse = (await response.json()) as PlanResponse | { error: string }
+
+      if ('error' in planResponse) {
+        return planResponse
+      }
+
+      return {
+        ...planResponse,
+        selectedDiskPaths: diskPaths
+      }
+    },
+    onSuccess: (data) => {
+      if (!('error' in data)) {
+        setLocation('/results')
+      }
+    },
   })
-
-  const handleCreatePlan = () => {
-    const includePatterns = mergePatterns(form.values.include, form.values.includeCustom)
-    const excludePatterns = mergePatterns(form.values.exclude, form.values.excludeCustom)
-
-    const diskPaths = form.values.sourceDisk
-      ? [...new Set([...form.values.destDisks, form.values.sourceDisk])]
-      : form.values.destDisks
-
-    createPlan({
-      diskPaths,
-      sourceDisk: form.values.sourceDisk,
-      destDisks: form.values.destDisks,
-      pathFilters: form.values.pathFilters,
-      minSpace: form.values.minSpace,
-      minFileSize: form.values.minFileSize,
-      include: includePatterns,
-      exclude: excludePatterns,
-      minSplitSize: form.values.minSplitSize,
-      moveAsFolderThreshold: form.values.moveAsFolderThreshold,
-      debug: form.values.debug,
-    })
-  }
 
   const handleNext = () => {
     const nextIndex = Math.min(activeStep + 1, ROUTES.length - 1)
@@ -127,14 +148,18 @@ export function PlanWizard() {
             <ReviewPage
               form={form}
               onBack={handleBack}
-              onCreatePlan={handleCreatePlan}
-              isCreatingPlan={isPending}
-              planError={data}
-              worldViewSnapshots={worldViewSnapshots}
+              onCreatePlan={() => createPlanMutation.mutate()}
+              isCreatingPlan={createPlanMutation.isPending}
+              planError={createPlanMutation.data}
+              worldViewSnapshots={
+                createPlanMutation.data && !('error' in createPlanMutation.data) && createPlanMutation.data.worldViewSnapshots
+                  ? createPlanMutation.data.worldViewSnapshots
+                  : []
+              }
             />
           </Route>
           <Route path="/results">
-            <ResultsPage result={data ?? null} />
+            <ResultsPage result={createPlanMutation.data ?? null} />
           </Route>
         </Switch>
       </Stack>

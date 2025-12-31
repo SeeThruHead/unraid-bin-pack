@@ -1,0 +1,210 @@
+[
+  {
+    "step": 0,
+    "action": "Initial WorldView",
+    "worldView": {
+      "disks": [
+        {
+          "path": "/mnt/disk1",
+          "totalBytes": 1000000000,
+          "freeBytes": 100000000
+        },
+        {
+          "path": "/mnt/disk2",
+          "totalBytes": 1000000000,
+          "freeBytes": 800000000
+        },
+        {
+          "path": "/mnt/disk3",
+          "totalBytes": 1000000000,
+          "freeBytes": 950000000
+        }
+      ],
+      "files": [
+        {
+          "diskPath": "/mnt/disk1",
+          "relativePath": "Movies/Movie1.mkv",
+          "absolutePath": "/mnt/disk1/Movies/Movie1.mkv",
+          "sizeBytes": 500000000
+        },
+        {
+          "diskPath": "/mnt/disk1",
+          "relativePath": "Movies/Movie2.mkv",
+          "absolutePath": "/mnt/disk1/Movies/Movie2.mkv",
+          "sizeBytes": 400000000
+        }
+      ]
+    }
+  },
+  {
+    "step": 1,
+    "action": "Start processing disk /mnt/disk1",
+    "worldView": {
+      "disks": [
+        {
+          "path": "/mnt/disk1",
+          "totalBytes": 1000000000,
+          "freeBytes": 100000000
+        },
+        {
+          "path": "/mnt/disk2",
+          "totalBytes": 1000000000,
+          "freeBytes": 800000000
+        },
+        {
+          "path": "/mnt/disk3",
+          "totalBytes": 1000000000,
+          "freeBytes": 950000000
+        }
+      ],
+      "files": [
+        {
+          "diskPath": "/mnt/disk1",
+          "relativePath": "Movies/Movie1.mkv",
+          "absolutePath": "/mnt/disk1/Movies/Movie1.mkv",
+          "sizeBytes": 500000000
+        },
+        {
+          "diskPath": "/mnt/disk1",
+          "relativePath": "Movies/Movie2.mkv",
+          "absolutePath": "/mnt/disk1/Movies/Movie2.mkv",
+          "sizeBytes": 400000000
+        }
+      ]
+    },
+    "metadata": {
+      "sourceDisk": "/mnt/disk1",
+      "totalFilesOnDisk": 2
+    }
+  },
+  {
+    "step": 2,
+    "action": "Moved file: Movies/Movie1.mkv",
+    "worldView": {
+      "disks": [
+        {
+          "path": "/mnt/disk1",
+          "totalBytes": 1000000000,
+          "freeBytes": 600000000
+        },
+        {
+          "path": "/mnt/disk2",
+          "totalBytes": 1000000000,
+          "freeBytes": 800000000
+        },
+        {
+          "path": "/mnt/disk3",
+          "totalBytes": 1000000000,
+          "freeBytes": 450000000
+        }
+      ],
+      "files": [
+        {
+          "diskPath": "/mnt/disk3",
+          "relativePath": "Movies/Movie1.mkv",
+          "absolutePath": "/mnt/disk3/Movies/Movie1.mkv",
+          "sizeBytes": 500000000
+        },
+        {
+          "diskPath": "/mnt/disk1",
+          "relativePath": "Movies/Movie2.mkv",
+          "absolutePath": "/mnt/disk1/Movies/Movie2.mkv",
+          "sizeBytes": 400000000
+        }
+      ]
+    },
+    "metadata": {
+      "sourceDisk": "/mnt/disk1",
+      "targetDisk": "/mnt/disk3",
+      "movedFile": "Movies/Movie1.mkv",
+      "movedCount": 1,
+      "totalFilesOnDisk": 2
+    }
+  },
+  {
+    "step": 3,
+    "action": "Moved file: Movies/Movie2.mkv",
+    "worldView": {
+      "disks": [
+        {
+          "path": "/mnt/disk1",
+          "totalBytes": 1000000000,
+          "freeBytes": 1000000000
+        },
+        {
+          "path": "/mnt/disk2",
+          "totalBytes": 1000000000,
+          "freeBytes": 400000000
+        },
+        {
+          "path": "/mnt/disk3",
+          "totalBytes": 1000000000,
+          "freeBytes": 450000000
+        }
+      ],
+      "files": [
+        {
+          "diskPath": "/mnt/disk3",
+          "relativePath": "Movies/Movie1.mkv",
+          "absolutePath": "/mnt/disk3/Movies/Movie1.mkv",
+          "sizeBytes": 500000000
+        },
+        {
+          "diskPath": "/mnt/disk2",
+          "relativePath": "Movies/Movie2.mkv",
+          "absolutePath": "/mnt/disk2/Movies/Movie2.mkv",
+          "sizeBytes": 400000000
+        }
+      ]
+    },
+    "metadata": {
+      "sourceDisk": "/mnt/disk1",
+      "targetDisk": "/mnt/disk2",
+      "movedFile": "Movies/Movie2.mkv",
+      "movedCount": 2,
+      "totalFilesOnDisk": 2
+    }
+  },
+  {
+    "step": 4,
+    "action": "Finished processing: /mnt/disk1 is now EMPTY",
+    "worldView": {
+      "disks": [
+        {
+          "path": "/mnt/disk1",
+          "totalBytes": 1000000000,
+          "freeBytes": 1000000000
+        },
+        {
+          "path": "/mnt/disk2",
+          "totalBytes": 1000000000,
+          "freeBytes": 400000000
+        },
+        {
+          "path": "/mnt/disk3",
+          "totalBytes": 1000000000,
+          "freeBytes": 450000000
+        }
+      ],
+      "files": [
+        {
+          "diskPath": "/mnt/disk3",
+          "relativePath": "Movies/Movie1.mkv",
+          "absolutePath": "/mnt/disk3/Movies/Movie1.mkv",
+          "sizeBytes": 500000000
+        },
+        {
+          "diskPath": "/mnt/disk2",
+          "relativePath": "Movies/Movie2.mkv",
+          "absolutePath": "/mnt/disk2/Movies/Movie2.mkv",
+          "sizeBytes": 400000000
+        }
+      ]
+    },
+    "metadata": {
+      "sourceDisk": "/mnt/disk1",
+      "movedCount": 2,
+      "totalFilesOnDisk": 2
+    }
+  }
+]

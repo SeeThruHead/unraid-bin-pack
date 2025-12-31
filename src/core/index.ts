@@ -103,6 +103,7 @@ export interface PlanResult {
     readonly usedPercent: number
     readonly usedPercentAfter: number
   }>
+  readonly worldViewSnapshots?: ReadonlyArray<import("./services/BinPack/PackTightly").WorldViewSnapshot>
 }
 
 export interface ExecutionResult {
@@ -127,134 +128,6 @@ const parseConfig = (config: PlanConfig) => {
     debug: config.debug ?? false,
   }
 }
-
-/**
- * Create a consolidation plan with WorldView streaming
- *
- * @param diskPaths - Array of disk paths to consolidate (e.g., ['/mnt/disk1', '/mnt/disk2'])
- * @param config - Planning configuration options
- * @param onWorldViewChange - Optional callback for WorldView state changes
- * @returns Effect that produces a PlanResult
- */
-export const createPlanWithStream = (
-  diskPaths: string[] | readonly string[],
-  config: PlanConfig,
-  onWorldViewChange?: (snapshot: import("./services/BinPack/PackTightly").WorldViewSnapshot) => void
-) =>
-  Effect.gen(function* () {
-    const diskService = yield* DiskServiceTag
-    const scannerService = yield* ScannerServiceTag
-    const planGenerator = yield* PlanGeneratorServiceTag
-
-    // Parse configuration
-    const parsed = parseConfig(config)
-    yield* Effect.logDebug(`Config: src=${config.src}, dest=${config.dest}`)
-    yield* Effect.logDebug(`Parsed srcDiskPaths: ${parsed.srcDiskPaths?.join(", ") ?? "undefined"}`)
-
-    // Validate and get disk information
-    const allDisks = yield* diskService.discover([...diskPaths])
-
-    // Scan all files
-    const allFiles = yield* Effect.flatMap(
-      Effect.forEach(allDisks, (disk) =>
-        scannerService.scanDisk(disk.path, {
-          excludePatterns: parsed.excludePatterns,
-        })
-      ),
-      (fileArrays) => Effect.succeed(fileArrays.flat())
-    )
-
-    // Build WorldView
-    const initialWorldView: WorldView = {
-      disks: allDisks.map((disk) => ({
-        path: disk.path,
-        totalBytes: disk.totalBytes,
-        freeBytes: disk.freeBytes,
-      })),
-      files: allFiles,
-    }
-
-    // Run consolidation algorithm (PackTightly - consolidates free space onto fewer disks)
-    const result = yield* packTightly(initialWorldView, {
-      minSpaceBytes: parsed.minSpaceBytes,
-      minFileSizeBytes: parsed.minFileSizeBytes,
-      pathPrefixes: parsed.pathPrefixes,
-      srcDiskPaths: parsed.srcDiskPaths,
-      onWorldViewChange,
-    })
-
-    // Optimize move chains
-    const optimizedMoves = optimizeMoveChains(result.moves)
-
-    // Calculate statistics
-    const pendingMoves = optimizedMoves.filter((m) => m.status === "pending")
-    const skippedMoves = optimizedMoves.filter((m) => m.status === "skipped")
-
-    // Project final disk states
-    const initialDiskSnapshots: DiskSnapshot[] = allDisks.map((d) => ({
-      path: d.path,
-      totalBytes: d.totalBytes,
-      freeBytes: d.freeBytes,
-    }))
-    const projection = projectDiskStates(initialDiskSnapshots, optimizedMoves)
-
-    // Generate plan script
-    const plan = createMovePlan(optimizedMoves)
-    const allDestDiskPaths = new Set(optimizedMoves.map((m) => m.targetDiskPath))
-    const diskStats = Object.fromEntries(
-      allDisks
-        .filter((disk) => allDestDiskPaths.has(disk.path))
-        .map((disk) => [
-          disk.path,
-          {
-            path: disk.path,
-            totalBytes: disk.totalBytes,
-            freeBytes: disk.freeBytes,
-          },
-        ])
-    )
-
-    const primarySourceDisk = parsed.srcDiskPaths?.[0] ?? optimizedMoves[0]?.file.diskPath ?? "auto"
-    const script = yield* planGenerator.generate({
-      moves: plan.moves,
-      sourceDisk: primarySourceDisk,
-      diskStats,
-      concurrency: 4,
-    })
-
-    // Calculate disk projections for display
-    const diskProjections = allDisks.map((disk) => {
-      const projectedState = projection.final.find(d => d.path === disk.path)
-      const freeAfter = projectedState?.freeBytes ?? disk.freeBytes
-      const usedBefore = disk.totalBytes - disk.freeBytes
-      const usedAfter = disk.totalBytes - freeAfter
-
-      return {
-        path: disk.path,
-        totalBytes: disk.totalBytes,
-        currentFree: disk.freeBytes,
-        freeAfter,
-        usedPercent: (usedBefore / disk.totalBytes) * 100,
-        usedPercentAfter: (usedAfter / disk.totalBytes) * 100,
-      }
-    })
-
-    return {
-      script,
-      moves: pendingMoves.map(m => ({
-        source: m.file.absolutePath,
-        destination: `${m.targetDiskPath}/${m.file.relativePath}`,
-        sizeBytes: m.file.sizeBytes,
-      })),
-      stats: {
-        bytesConsolidated: result.bytesConsolidated,
-        movesPlanned: pendingMoves.length,
-        skipped: skippedMoves.length,
-        disksEvacuated: projection.evacuatedCount,
-      },
-      diskProjections,
-    } satisfies PlanResult
-  })
 
 /**
  * Create a consolidation plan
@@ -300,12 +173,18 @@ export const createPlan = (
       files: allFiles,
     }
 
+    // Collect WorldView snapshots for debugging
+    const worldViewSnapshots: import("./services/BinPack/PackTightly").WorldViewSnapshot[] = []
+
     // Run consolidation algorithm (PackTightly - consolidates free space onto fewer disks)
     const result = yield* packTightly(initialWorldView, {
       minSpaceBytes: parsed.minSpaceBytes,
       minFileSizeBytes: parsed.minFileSizeBytes,
       pathPrefixes: parsed.pathPrefixes,
       srcDiskPaths: parsed.srcDiskPaths,
+      onWorldViewChange: (snapshot) => {
+        worldViewSnapshots.push(snapshot)
+      },
     })
 
     // Optimize move chains
@@ -378,6 +257,7 @@ export const createPlan = (
         disksEvacuated: projection.evacuatedCount,
       },
       diskProjections,
+      worldViewSnapshots,
     } satisfies PlanResult
   })
 
