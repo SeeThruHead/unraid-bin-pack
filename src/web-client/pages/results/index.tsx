@@ -7,6 +7,7 @@ import { DiskStatsTable } from "./components/DiskStatsTable";
 import { ExecutionPanel } from "./components/ExecutionPanel";
 import { ExecutionSummary } from "./components/ExecutionSummary";
 import type { PlanResponse, DiskResponse } from "../../types";
+import { logger } from "../../lib/logger";
 
 type ExecutionResult = {
   success: boolean;
@@ -21,7 +22,7 @@ interface ResultsPageProps {
 }
 
 export function ResultsPage({ result, isError, error }: ResultsPageProps) {
-  console.log("ResultsPage render:", { result, isError, error });
+  logger.log("ResultsPage render:", { result, isError, error });
   const queryClient = useQueryClient();
   const [actualDiskSpace, setActualDiskSpace] = useState<DiskResponse[]>([]);
   const [executionResult, setExecutionResult] = useState<{
@@ -40,7 +41,7 @@ export function ResultsPage({ result, isError, error }: ResultsPageProps) {
   );
 
   if (isError && error) {
-    console.error("Error in ResultsPage:", error);
+    logger.error("Error in ResultsPage:", error);
     return (
       <Stack gap="lg" mt="md">
         <Alert icon={<IconAlertCircle size={16} />} title="Plan Creation Failed" color="red">

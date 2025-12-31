@@ -35,6 +35,7 @@ export default [
       // Functional programming rules (testing one by one)
       "functional/no-let": "error",
       "functional/no-throw-statements": "error",
+      "functional/no-try-statements": "error",
       "functional/prefer-tacit": "error",
       "no-param-reassign": "error",
 
@@ -84,9 +85,7 @@ export default [
   {
     files: ["src/**/*.test.ts", "src/test/**/*.ts"],
     rules: {
-      // Allow any in tests for mocking and assertions
       "@typescript-eslint/no-explicit-any": "off",
-      // Allow non-null assertions in tests
       "@typescript-eslint/no-non-null-assertion": "off"
     }
   }

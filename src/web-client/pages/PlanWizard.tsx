@@ -11,6 +11,7 @@ import { usePlanStore } from "../store/planStore";
 import type { RpcRoutes } from "../../web-server/rpc";
 import type { PlanResponse } from "../types";
 import { throwMutationError } from "../lib/reactQueryUtils";
+import { logger } from "../lib/logger";
 
 const client = hc<RpcRoutes>("/api");
 
@@ -65,7 +66,7 @@ export function PlanWizard() {
       const planResponse = (await response.json()) as PlanResponse | { error: string };
 
       if ("error" in planResponse) {
-        console.error("Plan creation failed:", planResponse.error);
+        logger.error("Plan creation failed:", planResponse.error);
         throwMutationError(planResponse.error);
       }
 
@@ -75,11 +76,11 @@ export function PlanWizard() {
       };
     },
     onSuccess: (data) => {
-      console.log("Plan created successfully:", data);
+      logger.log("Plan created successfully:", data);
       setLocation("/results");
     },
     onError: (error) => {
-      console.error("Mutation error:", error);
+      logger.error("Mutation error:", error);
     }
   });
 

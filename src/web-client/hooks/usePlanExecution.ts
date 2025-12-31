@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { hc } from "hono/client";
 import type { RpcRoutes } from "../../web-server/rpc";
 import type { DiskProjection, DiskResponse } from "../types";
+import { safeJsonParse } from "../lib/safeJson";
 
 const client = hc<RpcRoutes>("/api");
 
@@ -42,13 +43,7 @@ interface UsePlanExecutionReturn {
   reset: () => void;
 }
 
-const parseSSEData = (data: string): SSEMessage | null => {
-  try {
-    return JSON.parse(data);
-  } catch {
-    return null;
-  }
-};
+const parseSSEData = safeJsonParse<SSEMessage>;
 
 const addEvent = (events: ExecutionEvent[], message: string): ExecutionEvent[] => [
   ...events,

@@ -243,24 +243,29 @@ const rpc = new Hono()
 
           const finalPosition = yield* Effect.promise(polling.getPosition);
 
-          try {
-            const stats = yield* Effect.tryPromise(() => fs.stat(logFile));
-            if (stats.size > finalPosition) {
-              const fileHandle = yield* Effect.tryPromise(() => fs.open(logFile, "r"));
-              const buffer = Buffer.alloc(stats.size - finalPosition);
-              yield* Effect.tryPromise(() =>
-                fileHandle.read(buffer, 0, buffer.length, finalPosition)
-              );
-              yield* Effect.tryPromise(() => fileHandle.close());
+          yield* pipe(
+            Effect.gen(function* () {
+              const stats = yield* Effect.tryPromise(() => fs.stat(logFile));
+              if (stats.size > finalPosition) {
+                const fileHandle = yield* Effect.tryPromise(() => fs.open(logFile, "r"));
+                const buffer = Buffer.alloc(stats.size - finalPosition);
+                yield* Effect.tryPromise(() =>
+                  fileHandle.read(buffer, 0, buffer.length, finalPosition)
+                );
+                yield* Effect.tryPromise(() => fileHandle.close());
 
-              const newContent = buffer.toString();
-              const lines = newContent.split("\n").filter((line: string) => line.trim());
+                const newContent = buffer.toString();
+                const lines = newContent.split("\n").filter((line: string) => line.trim());
 
-              for (const line of lines) {
-                yield* Effect.promise(() => writeSSEMessage(stream, "progress", { message: line }));
+                for (const line of lines) {
+                  yield* Effect.promise(() =>
+                    writeSSEMessage(stream, "progress", { message: line })
+                  );
+                }
               }
-            }
-          } catch {}
+            }),
+            Effect.catchAll(() => Effect.void)
+          );
 
           yield* Effect.promise(() => writeSSEMessage(stream, "complete", { result: execResult }));
         }).pipe(

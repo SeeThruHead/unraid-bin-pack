@@ -236,9 +236,7 @@ export const fromDomainError = (error: unknown): AppError => {
   }
 
   if (isDomainError(error)) {
-    try {
-      return matchDomainError(error);
-    } catch {}
+    return matchDomainError(error);
   }
 
   if (error instanceof Error) {

@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { safeAsync } from "./utils";
 
 interface TreeNode {
   path: string;
@@ -19,11 +20,11 @@ async function scanDirectories(basePaths: string[]): Promise<TreeNode[]> {
   const nodeMap = new Map<string, TreeNode>();
 
   for (const basePath of basePaths) {
-    try {
-      const entries = await Array.fromAsync(
-        new Bun.Glob("*").scan({ cwd: basePath, onlyFiles: false })
-      );
+    const entries = await safeAsync(() =>
+      Array.fromAsync(new Bun.Glob("*").scan({ cwd: basePath, onlyFiles: false }))
+    );
 
+    if (entries) {
       for (const entry of entries) {
         if (entry.startsWith(".")) continue;
 
@@ -45,11 +46,11 @@ async function scanDirectories(basePaths: string[]): Promise<TreeNode[]> {
             return newNode;
           })();
 
-        try {
-          const subEntries = await Array.fromAsync(
-            new Bun.Glob("*").scan({ cwd: fullPath, onlyFiles: false })
-          );
+        const subEntries = await safeAsync(() =>
+          Array.fromAsync(new Bun.Glob("*").scan({ cwd: fullPath, onlyFiles: false }))
+        );
 
+        if (subEntries) {
           const childrenMap = new Map<string, TreeNode>();
           if (node.children) {
             for (const child of node.children) {
@@ -78,9 +79,9 @@ async function scanDirectories(basePaths: string[]): Promise<TreeNode[]> {
           if (node.children.length === 0) {
             delete node.children;
           }
-        } catch {}
+        }
       }
-    } catch {}
+    }
   }
 
   return Array.from(nodeMap.values()).sort((a, b) => a.name.localeCompare(b.name));

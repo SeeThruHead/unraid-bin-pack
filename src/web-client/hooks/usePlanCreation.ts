@@ -2,6 +2,8 @@ import { useState, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import type { WorldViewSnapshot } from "@core";
 import type { PlanResponse } from "../types";
+import { safeJsonParse } from "../lib/safeJson";
+import { logger } from "../lib/logger";
 
 interface PlanConfig {
   diskPaths: string[];
@@ -62,38 +64,35 @@ export function usePlanCreation(options?: PlanCreationOptions) {
         eventSourceRef.current = eventSource;
 
         eventSource.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
+          const data = safeJsonParse<{ type: string; [key: string]: unknown }>(event.data);
+          if (!data) return;
 
-            if (data.type === "worldview") {
-              setWorldViewSnapshots((prev) => [
-                ...prev,
-                {
-                  step: data.step,
-                  action: data.action,
-                  worldView: data.worldView,
-                  metadata: data.metadata
-                }
-              ]);
-            } else if (data.type === "complete") {
-              eventSource.close();
-              eventSourceRef.current = null;
-              resolve({
-                ...data.result,
-                selectedDiskPaths: diskPaths
-              });
-            } else if (data.type === "error") {
-              eventSource.close();
-              eventSourceRef.current = null;
-              reject(new Error(data.error));
-            }
-          } catch (error) {
-            console.error("Error parsing SSE message:", error);
+          if (data.type === "worldview") {
+            setWorldViewSnapshots((prev) => [
+              ...prev,
+              {
+                step: data.step,
+                action: data.action,
+                worldView: data.worldView,
+                metadata: data.metadata
+              } as WorldViewSnapshot
+            ]);
+          } else if (data.type === "complete") {
+            eventSource.close();
+            eventSourceRef.current = null;
+            resolve({
+              ...data.result,
+              selectedDiskPaths: diskPaths
+            });
+          } else if (data.type === "error") {
+            eventSource.close();
+            eventSourceRef.current = null;
+            reject(new Error(data.error as string));
           }
         };
 
         eventSource.onerror = (error) => {
-          console.error("EventSource error:", error);
+          logger.error("EventSource error:", error);
           eventSource.close();
           eventSourceRef.current = null;
           reject(new Error("Failed to connect to plan stream"));
