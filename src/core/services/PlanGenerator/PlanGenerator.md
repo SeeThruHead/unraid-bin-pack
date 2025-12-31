@@ -10,44 +10,45 @@ PlanGenerator is a high-level service that combines scanning, filtering, consoli
 
 ```typescript
 interface PlanGeneratorService {
-  readonly generate: (options: PlanGeneratorOptions) => Effect<string>
+  readonly generate: (options: PlanGeneratorOptions) => Effect<string>;
 }
 
 interface PlanGeneratorOptions {
-  readonly moves: readonly FileMove[]
-  readonly sourceDisk: string
-  readonly diskStats: Record<string, DiskStats>
-  readonly concurrency: number
+  readonly moves: readonly FileMove[];
+  readonly sourceDisk: string;
+  readonly diskStats: Record<string, DiskStats>;
+  readonly concurrency: number;
 }
 ```
 
 ## Usage
 
 ```typescript
-import { Effect } from 'effect'
-import { PlanGeneratorServiceTag } from '@services/PlanGenerator'
+import { Effect } from "effect";
+import { PlanGeneratorServiceTag } from "@services/PlanGenerator";
 
 const program = Effect.gen(function* () {
-  const planGenerator = yield* PlanGeneratorServiceTag
+  const planGenerator = yield* PlanGeneratorServiceTag;
 
   const bashScript = yield* planGenerator.generate({
     moves: consolidationResult.moves,
-    sourceDisk: '/mnt/disk1',
+    sourceDisk: "/mnt/disk1",
     diskStats: {
-      '/mnt/disk1': { totalBytes: 4e12, freeBytes: 1e12 },
-      '/mnt/disk2': { totalBytes: 4e12, freeBytes: 3e12 },
+      "/mnt/disk1": { totalBytes: 4e12, freeBytes: 1e12 },
+      "/mnt/disk2": { totalBytes: 4e12, freeBytes: 3e12 }
     },
-    concurrency: 4,
-  })
+    concurrency: 4
+  });
 
   // Save or execute the script
-  console.log(bashScript)
-})
+  console.log(bashScript);
+});
 ```
 
 ## How It Works
 
 The service generates a bash script that:
+
 1. Uses rsync to transfer files
 2. Groups files by target disk for efficiency
 3. Runs transfers in parallel (up to concurrency limit)

@@ -10,8 +10,8 @@ DiskService provides operations for validating disk paths and retrieving disk in
 
 ```typescript
 interface DiskService {
-  readonly validateDiskPath: (path: string) => Effect<void, DiskError>
-  readonly getDiskInfo: (path: string) => Effect<DiskState, DiskError>
+  readonly validateDiskPath: (path: string) => Effect<void, DiskError>;
+  readonly getDiskInfo: (path: string) => Effect<DiskState, DiskError>;
 }
 ```
 
@@ -28,56 +28,54 @@ interface DiskService {
 ### Validate Disk Path
 
 ```typescript
-import { Effect } from 'effect'
-import { DiskServiceTag } from '@services/DiskService'
+import { Effect } from "effect";
+import { DiskServiceTag } from "@services/DiskService";
 
 const program = Effect.gen(function* () {
-  const diskService = yield* DiskServiceTag
+  const diskService = yield* DiskServiceTag;
 
-  yield* diskService.validateDiskPath('/mnt/disk1')
+  yield* diskService.validateDiskPath("/mnt/disk1");
 
-  console.log('Disk path is valid')
-})
+  console.log("Disk path is valid");
+});
 ```
 
 ### Get Disk Information
 
 ```typescript
 const program = Effect.gen(function* () {
-  const diskService = yield* DiskServiceTag
+  const diskService = yield* DiskServiceTag;
 
-  const info = yield* diskService.getDiskInfo('/mnt/disk1')
+  const info = yield* diskService.getDiskInfo("/mnt/disk1");
 
-  console.log(`Path: ${info.path}`)
-  console.log(`Total: ${info.totalBytes} bytes`)
-  console.log(`Free: ${info.freeBytes} bytes`)
-})
+  console.log(`Path: ${info.path}`);
+  console.log(`Total: ${info.totalBytes} bytes`);
+  console.log(`Free: ${info.freeBytes} bytes`);
+});
 ```
 
 ### Handle Errors
 
 ```typescript
 const program = Effect.gen(function* () {
-  const diskService = yield* DiskServiceTag
+  const diskService = yield* DiskServiceTag;
 
-  const result = yield* diskService.getDiskInfo('/mnt/disk1').pipe(
+  const result = yield* diskService.getDiskInfo("/mnt/disk1").pipe(
     Effect.catchTags({
-      DiskNotFound: () =>
-        Effect.fail(new Error('Disk not found')),
-      DiskPermissionDenied: () =>
-        Effect.fail(new Error('Permission denied')),
-      DiskNotAMountPoint: () =>
-        Effect.fail(new Error('Not a valid mount point')),
+      DiskNotFound: () => Effect.fail(new Error("Disk not found")),
+      DiskPermissionDenied: () => Effect.fail(new Error("Permission denied")),
+      DiskNotAMountPoint: () => Effect.fail(new Error("Not a valid mount point"))
     })
-  )
+  );
 
-  return result
-})
+  return result;
+});
 ```
 
 ## Validation Rules
 
 A valid disk path must:
+
 1. **Exist** - Path must exist in the filesystem
 2. **Be a directory** - Path must be a directory, not a file
 3. **Be a mount point** - Path must be a mounted filesystem

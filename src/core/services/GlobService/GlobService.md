@@ -10,15 +10,12 @@ GlobService finds files matching glob patterns, used for discovering all files o
 
 ```typescript
 interface GlobService {
-  readonly glob: (
-    pattern: string,
-    options?: GlobOptions
-  ) => Effect<string[], GlobError>
+  readonly glob: (pattern: string, options?: GlobOptions) => Effect<string[], GlobError>;
 }
 
 interface GlobOptions {
-  readonly cwd?: string
-  readonly ignore?: string[]
+  readonly cwd?: string;
+  readonly ignore?: string[];
 }
 ```
 
@@ -27,35 +24,35 @@ interface GlobOptions {
 ### Basic File Search
 
 ```typescript
-import { Effect } from 'effect'
-import { GlobServiceTag } from '@services/GlobService'
+import { Effect } from "effect";
+import { GlobServiceTag } from "@services/GlobService";
 
 const program = Effect.gen(function* () {
-  const globService = yield* GlobServiceTag
+  const globService = yield* GlobServiceTag;
 
   // Find all .mkv files
-  const files = yield* globService.glob('**/*.mkv', {
-    cwd: '/mnt/disk1'
-  })
+  const files = yield* globService.glob("**/*.mkv", {
+    cwd: "/mnt/disk1"
+  });
 
-  console.log(`Found ${files.length} video files`)
-  files.forEach(file => console.log(file))
-})
+  console.log(`Found ${files.length} video files`);
+  files.forEach((file) => console.log(file));
+});
 ```
 
 ### With Exclusions
 
 ```typescript
 const program = Effect.gen(function* () {
-  const globService = yield* GlobServiceTag
+  const globService = yield* GlobServiceTag;
 
-  const files = yield* globService.glob('**/*', {
-    cwd: '/mnt/disk1',
-    ignore: ['**/*.tmp', '**/node_modules/**']
-  })
+  const files = yield* globService.glob("**/*", {
+    cwd: "/mnt/disk1",
+    ignore: ["**/*.tmp", "**/node_modules/**"]
+  });
 
-  console.log(`Found ${files.length} files (excluding .tmp and node_modules)`)
-})
+  console.log(`Found ${files.length} files (excluding .tmp and node_modules)`);
+});
 ```
 
 ## Glob Patterns
@@ -70,20 +67,20 @@ const program = Effect.gen(function* () {
 
 ```typescript
 const program = Effect.gen(function* () {
-  const globService = yield* GlobServiceTag
+  const globService = yield* GlobServiceTag;
 
-  const files = yield* globService.glob('**/*', { cwd: '/mnt/disk1' }).pipe(
+  const files = yield* globService.glob("**/*", { cwd: "/mnt/disk1" }).pipe(
     Effect.catchTags({
       GlobNotFound: () => Effect.succeed([]),
-      GlobPermissionDenied: error => {
-        console.error(`Permission denied: ${error.path}`)
-        return Effect.succeed([])
-      },
+      GlobPermissionDenied: (error) => {
+        console.error(`Permission denied: ${error.path}`);
+        return Effect.succeed([]);
+      }
     })
-  )
+  );
 
-  return files
-})
+  return files;
+});
 ```
 
 ## See Also

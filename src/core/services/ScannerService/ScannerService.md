@@ -9,12 +9,12 @@ interface ScannerService {
   readonly scanDisk: (
     diskPath: string,
     options?: { excludePatterns?: string[] }
-  ) => Effect<FileEntry[], ScannerError>
+  ) => Effect<FileEntry[], ScannerError>;
 
   readonly scanAllDisks: (
     diskPaths: readonly string[],
     options?: { excludePatterns?: string[]; concurrency?: number }
-  ) => Effect<FileEntry[], ScannerError>
+  ) => Effect<FileEntry[], ScannerError>;
 }
 ```
 
@@ -25,13 +25,16 @@ interface ScannerService {
 Scans a single disk and returns all files found.
 
 **Parameters:**
+
 - `diskPath`: Mount point to scan (e.g., `/mnt/disk1`)
 - `options.excludePatterns`: Optional glob patterns to exclude (e.g., `['**/*.tmp']`)
 
 **Returns:**
+
 - `Effect<FileEntry[], ScannerError>`
 
 **Errors:**
+
 - `ScanPathNotFound`: Disk path doesn't exist
 - `ScanPermissionDenied`: Insufficient permissions
 - `ScanFailed`: Other scan failures
@@ -42,11 +45,13 @@ Scans a single disk and returns all files found.
 Scans multiple disks and combines all files into a single array.
 
 **Parameters:**
+
 - `diskPaths`: Array of disk mount points
 - `options.excludePatterns`: Optional glob patterns to exclude
 - `options.concurrency`: Max concurrent disk scans (default: unlimited)
 
 **Returns:**
+
 - `Effect<FileEntry[], ScannerError>`
 
 ## Examples
@@ -101,13 +106,13 @@ When scanning multiple disks:
 Access the service via dependency injection:
 
 ```typescript
-import { ScannerServiceTag } from '@services/ScannerService'
+import { ScannerServiceTag } from "@services/ScannerService";
 
 const program = Effect.gen(function* () {
-  const scanner = yield* ScannerServiceTag
-  const files = yield* scanner.scanDisk('/mnt/disk1')
-  return files
-})
+  const scanner = yield* ScannerServiceTag;
+  const files = yield* scanner.scanDisk("/mnt/disk1");
+  return files;
+});
 ```
 
 ## See Also

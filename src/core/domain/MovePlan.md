@@ -7,7 +7,7 @@ A `MovePlan` represents a set of file moves from source disks to target disks, a
 ### MoveStatus
 
 ```typescript
-type MoveStatus = "pending" | "in_progress" | "completed" | "skipped" | "failed"
+type MoveStatus = "pending" | "in_progress" | "completed" | "skipped" | "failed";
 ```
 
 ### FileMove
@@ -16,11 +16,11 @@ Represents a single file move operation.
 
 ```typescript
 interface FileMove {
-  readonly file: FileEntry           // The file to move
-  readonly targetDiskPath: string    // Destination disk path
-  readonly destinationPath: string   // Full destination path
-  readonly status: MoveStatus        // Current status
-  readonly reason?: string           // Optional reason (for skipped/failed)
+  readonly file: FileEntry; // The file to move
+  readonly targetDiskPath: string; // Destination disk path
+  readonly destinationPath: string; // Full destination path
+  readonly status: MoveStatus; // Current status
+  readonly reason?: string; // Optional reason (for skipped/failed)
 }
 ```
 
@@ -30,15 +30,15 @@ The complete plan with summary statistics.
 
 ```typescript
 interface MovePlan {
-  readonly moves: readonly FileMove[]
-  readonly summary: MoveSummary
+  readonly moves: readonly FileMove[];
+  readonly summary: MoveSummary;
 }
 
 interface MoveSummary {
-  readonly totalFiles: number                           // Total pending files
-  readonly totalBytes: number                           // Total bytes to move
-  readonly movesPerDisk: ReadonlyMap<string, number>   // File count per disk
-  readonly bytesPerDisk: ReadonlyMap<string, number>   // Bytes per disk
+  readonly totalFiles: number; // Total pending files
+  readonly totalBytes: number; // Total bytes to move
+  readonly movesPerDisk: ReadonlyMap<string, number>; // File count per disk
+  readonly bytesPerDisk: ReadonlyMap<string, number>; // Bytes per disk
 }
 ```
 
@@ -63,7 +63,7 @@ interface MoveSummary {
 Creates a new file move with "pending" status.
 
 ```typescript
-const move = createFileMove(file, '/mnt/disk2')
+const move = createFileMove(file, "/mnt/disk2");
 // {
 //   file: {...},
 //   targetDiskPath: '/mnt/disk2',
@@ -77,7 +77,7 @@ const move = createFileMove(file, '/mnt/disk2')
 Marks a move as skipped with a reason.
 
 ```typescript
-const skipped = skipMove(move, 'Insufficient space')
+const skipped = skipMove(move, "Insufficient space");
 // { ...move, status: 'skipped', reason: 'Insufficient space' }
 ```
 
@@ -86,7 +86,7 @@ const skipped = skipMove(move, 'Insufficient space')
 Computes statistics for a set of moves (only counts "pending" moves).
 
 ```typescript
-const summary = computeSummary(moves)
+const summary = computeSummary(moves);
 // {
 //   totalFiles: 2,
 //   totalBytes: 25000000000,

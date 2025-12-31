@@ -16,15 +16,16 @@ Options for the `plan` command.
 export const src = Options.text("src").pipe(
   Options.withDescription("Source disk to move files from. Auto-selects least full if not set."),
   Options.optional
-)
+);
 
 export const dest = Options.text("dest").pipe(
   Options.withDescription("Destination disk paths (comma-separated). Auto-discovers if not set."),
   Options.optional
-)
+);
 ```
 
 **CLI Usage:**
+
 ```bash
 --src /mnt/disk1
 --dest /mnt/disk2,/mnt/disk3,/mnt/disk4
@@ -36,15 +37,16 @@ export const dest = Options.text("dest").pipe(
 export const minSpace = Options.text("min-space").pipe(
   Options.withDescription("Min free space to leave on each disk (e.g., 50MB, 1GB)"),
   Options.optional
-)
+);
 
 export const minFileSize = Options.text("min-file-size").pipe(
   Options.withDescription("Min file size to move (e.g., 1MB, 500KB)"),
   Options.optional
-)
+);
 ```
 
 **CLI Usage:**
+
 ```bash
 --min-space 100GB
 --min-file-size 5MB
@@ -58,20 +60,21 @@ Supports human-readable sizes: `KB`, `MB`, `GB`, `TB`
 export const pathFilter = Options.text("path-filter").pipe(
   Options.withDescription("Path prefixes to include (e.g., '/media/Movies,/media/TV')"),
   Options.optional
-)
+);
 
 export const include = Options.text("include").pipe(
   Options.withDescription("File patterns to include (e.g., '*.mkv,*.mp4')"),
   Options.optional
-)
+);
 
 export const exclude = Options.text("exclude").pipe(
   Options.withDescription("Patterns to exclude (e.g., '.DS_Store,@eaDir')"),
   Options.optional
-)
+);
 ```
 
 **CLI Usage:**
+
 ```bash
 --path-filter /media/Movies,/media/TV
 --include *.mkv,*.mp4
@@ -84,15 +87,16 @@ export const exclude = Options.text("exclude").pipe(
 export const minSplitSize = Options.text("min-split-size").pipe(
   Options.withDescription("Folders smaller than this stay together (e.g., 1GB)"),
   Options.optional
-)
+);
 
 export const moveAsFolderThreshold = Options.text("move-as-folder-threshold").pipe(
   Options.withDescription("Keep folder together if largest file is this % of total (0.0-1.0)"),
   Options.optional
-)
+);
 ```
 
 **CLI Usage:**
+
 ```bash
 --min-split-size 2GB
 --move-as-folder-threshold 0.85
@@ -104,20 +108,21 @@ export const moveAsFolderThreshold = Options.text("move-as-folder-threshold").pi
 export const planFile = Options.file("plan-file").pipe(
   Options.withDescription("Path to plan script"),
   Options.optional
-)
+);
 
 export const force = Options.boolean("force").pipe(
   Options.withDescription("Overwrite existing plan without prompting"),
   Options.withDefault(false)
-)
+);
 
 export const debug = Options.boolean("debug").pipe(
   Options.withDescription("Enable verbose debug logging"),
   Options.withDefault(false)
-)
+);
 ```
 
 **CLI Usage:**
+
 ```bash
 --plan-file /custom/path/plan.sh
 --force
@@ -132,15 +137,16 @@ Options for the `apply` command.
 export const concurrency = Options.integer("concurrency").pipe(
   Options.withDescription("Parallel transfers (default: 4)"),
   Options.withDefault(4)
-)
+);
 
 export const dryRun = Options.boolean("dry-run").pipe(
   Options.withDescription("Preview transfers without executing"),
   Options.withDefault(false)
-)
+);
 ```
 
 **CLI Usage:**
+
 ```bash
 --concurrency 8
 --dry-run
@@ -153,18 +159,18 @@ export const dryRun = Options.boolean("dry-run").pipe(
 
 ```typescript
 export interface PlanOptions {
-  readonly src: string | undefined
-  readonly dest: string | undefined
-  readonly minSpace: string | undefined
-  readonly minFileSize: string | undefined
-  readonly pathFilter: string | undefined
-  readonly include: string | undefined
-  readonly exclude: string | undefined
-  readonly minSplitSize: string | undefined
-  readonly moveAsFolderThreshold: string | undefined
-  readonly planFile: string | undefined
-  readonly force: boolean
-  readonly debug?: boolean
+  readonly src: string | undefined;
+  readonly dest: string | undefined;
+  readonly minSpace: string | undefined;
+  readonly minFileSize: string | undefined;
+  readonly pathFilter: string | undefined;
+  readonly include: string | undefined;
+  readonly exclude: string | undefined;
+  readonly minSplitSize: string | undefined;
+  readonly moveAsFolderThreshold: string | undefined;
+  readonly planFile: string | undefined;
+  readonly force: boolean;
+  readonly debug?: boolean;
 }
 ```
 
@@ -172,9 +178,9 @@ export interface PlanOptions {
 
 ```typescript
 export interface ApplyOptions {
-  readonly planFile: string | undefined
-  readonly concurrency: number
-  readonly dryRun: boolean
+  readonly planFile: string | undefined;
+  readonly concurrency: number;
+  readonly dryRun: boolean;
 }
 ```
 
@@ -183,11 +189,11 @@ export interface ApplyOptions {
 ### Command Definition
 
 ```typescript
-import { Command, Options } from '@effect/cli'
-import * as Opts from './options'
+import { Command, Options } from "@effect/cli";
+import * as Opts from "./options";
 
 const planCommand = Command.make(
-  'plan',
+  "plan",
   {
     src: Opts.src,
     dest: Opts.dest,
@@ -200,10 +206,10 @@ const planCommand = Command.make(
     moveAsFolderThreshold: Opts.moveAsFolderThreshold,
     planFile: Opts.planFile,
     force: Opts.force,
-    debug: Opts.debug,
+    debug: Opts.debug
   },
   (options) => runPlan(options)
-)
+);
 ```
 
 ### Option Parsing
@@ -241,6 +247,7 @@ unraid-bin-pack plan
 ```
 
 Equivalent to:
+
 ```typescript
 {
   src: undefined,
@@ -294,6 +301,7 @@ unraid-bin-pack apply --plan-file /custom/plan.sh
 ### Text Options
 
 Return `string | undefined`:
+
 - `src`, `dest`, `minSpace`, `minFileSize`
 - `pathFilter`, `include`, `exclude`
 - `minSplitSize`, `moveAsFolderThreshold`
@@ -301,11 +309,13 @@ Return `string | undefined`:
 ### File Options
 
 Return file path `string | undefined`:
+
 - `planFile`
 
 ### Boolean Options
 
 Return `boolean` (have defaults):
+
 - `force` (default: `false`)
 - `dryRun` (default: `false`)
 - `debug` (default: `false`)
@@ -313,6 +323,7 @@ Return `boolean` (have defaults):
 ### Integer Options
 
 Return `number` (have defaults):
+
 - `concurrency` (default: `4`)
 
 ## See Also

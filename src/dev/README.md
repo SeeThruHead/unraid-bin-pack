@@ -5,11 +5,13 @@ Lightweight local development setup for testing UI changes without Docker or rea
 ## Quick Start
 
 Terminal 1 - Start mock API server:
+
 ```bash
 bun run web:mock
 ```
 
 Terminal 2 - Start Vite dev server:
+
 ```bash
 bun run web:dev
 ```
@@ -27,6 +29,7 @@ Open http://localhost:3000
 ## Editing Mock Data
 
 Edit `mock-data.ts` to change:
+
 - Disk sizes and free space
 - Folder patterns and children
 - Plan results and projections

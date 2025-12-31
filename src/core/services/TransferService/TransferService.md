@@ -10,34 +10,36 @@ TransferService executes moves directly without generating a bash script. It run
 
 ```typescript
 interface TransferService {
-  readonly execute: (plan: MovePlan) => Effect<TransferResult, TransferError>
+  readonly execute: (plan: MovePlan) => Effect<TransferResult, TransferError>;
 }
 ```
 
 ## Usage
 
 ```typescript
-import { Effect } from 'effect'
-import { TransferServiceTag } from '@services/TransferService'
+import { Effect } from "effect";
+import { TransferServiceTag } from "@services/TransferService";
 
 const program = Effect.gen(function* () {
-  const transferService = yield* TransferServiceTag
+  const transferService = yield* TransferServiceTag;
 
-  const result = yield* transferService.execute(movePlan)
+  const result = yield* transferService.execute(movePlan);
 
-  console.log(`Transferred ${result.filesTransferred} files`)
-  console.log(`Total bytes: ${result.bytesTransferred}`)
-})
+  console.log(`Transferred ${result.filesTransferred} files`);
+  console.log(`Total bytes: ${result.bytesTransferred}`);
+});
 ```
 
 ## Vs PlanScriptGenerator
 
 **TransferService:**
+
 - Executes moves directly from code
 - Provides programmatic progress tracking
 - Good for automated workflows
 
 **PlanScriptGenerator:**
+
 - Generates bash script for manual execution
 - User can review before running
 - Good for manual verification

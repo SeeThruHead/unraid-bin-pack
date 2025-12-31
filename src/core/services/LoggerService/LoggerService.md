@@ -10,27 +10,27 @@ LoggerService provides logging with different severity levels. Built on Effect's
 
 ```typescript
 interface LoggerService {
-  readonly debug: (message: string) => Effect<void>
-  readonly info: (message: string) => Effect<void>
-  readonly warn: (message: string) => Effect<void>
-  readonly error: (message: string) => Effect<void>
+  readonly debug: (message: string) => Effect<void>;
+  readonly info: (message: string) => Effect<void>;
+  readonly warn: (message: string) => Effect<void>;
+  readonly error: (message: string) => Effect<void>;
 }
 ```
 
 ## Usage
 
 ```typescript
-import { Effect } from 'effect'
-import { LoggerServiceTag } from '@services/LoggerService'
+import { Effect } from "effect";
+import { LoggerServiceTag } from "@services/LoggerService";
 
 const program = Effect.gen(function* () {
-  const logger = yield* LoggerServiceTag
+  const logger = yield* LoggerServiceTag;
 
-  yield* logger.info('Starting consolidation')
-  yield* logger.debug('Found 100 files')
-  yield* logger.warn('Disk almost full')
-  yield* logger.error('Transfer failed')
-})
+  yield* logger.info("Starting consolidation");
+  yield* logger.debug("Found 100 files");
+  yield* logger.warn("Disk almost full");
+  yield* logger.error("Transfer failed");
+});
 ```
 
 ## Log Levels
@@ -43,6 +43,7 @@ const program = Effect.gen(function* () {
 ## Integration with Effect
 
 Uses Effect's built-in logging, which means:
+
 - Logs are structured
 - Can be filtered by level
 - Integrate with Effect's runtime configuration

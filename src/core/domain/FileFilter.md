@@ -8,8 +8,8 @@ File filtering functions for selecting which files should be candidates for cons
 
 ```typescript
 interface FileFilterCriteria {
-  readonly minSizeBytes?: number         // Minimum file size filter
-  readonly pathPrefixes?: readonly string[]  // Path prefix filter
+  readonly minSizeBytes?: number; // Minimum file size filter
+  readonly pathPrefixes?: readonly string[]; // Path prefix filter
 }
 ```
 
@@ -30,10 +30,11 @@ const large Files = filterFilesBySize(files, 10_000_000_000) // >= 10GB
 Filters files to only include those under the specified path prefixes.
 
 ```typescript
-const mediaFiles = filterFilesByPathPrefix(files, ['/movies', '/tv'])
+const mediaFiles = filterFilesByPathPrefix(files, ["/movies", "/tv"]);
 ```
 
 **Path matching:**
+
 - Paths are relative to disk mount (e.g., `/mnt/disk1/movies` → `/movies`)
 - Multiple prefixes are OR'd (matches ANY prefix)
 
@@ -46,8 +47,8 @@ Applies multiple filters based on criteria. Filters are applied in order: size f
 ```typescript
 const filtered = applyFileFilters(files, {
   minSizeBytes: 10_000_000_000,
-  pathPrefixes: ['/movies'],
-})
+  pathPrefixes: ["/movies"]
+});
 ```
 
 ## Examples
@@ -91,6 +92,7 @@ Empty criteria returns all files:
 ### Combining Filters
 
 When both filters are specified:
+
 1. Size filter is applied first
 2. Path filter is applied to the result
 3. Files must pass BOTH filters
@@ -101,8 +103,8 @@ When both filters are specified:
 
 ```typescript
 const criteria = {
-  minSizeBytes: 10_000_000_000, // 10GB
-}
+  minSizeBytes: 10_000_000_000 // 10GB
+};
 ```
 
 Good for: Maximizing impact with fewer operations
@@ -111,8 +113,8 @@ Good for: Maximizing impact with fewer operations
 
 ```typescript
 const criteria = {
-  pathPrefixes: ['/movies', '/tv/series'],
-}
+  pathPrefixes: ["/movies", "/tv/series"]
+};
 ```
 
 Good for: Organizing content by type
@@ -121,9 +123,9 @@ Good for: Organizing content by type
 
 ```typescript
 const criteria = {
-  minSizeBytes: 5_000_000_000,     // 5GB
-  pathPrefixes: ['/movies', '/tv'],
-}
+  minSizeBytes: 5_000_000_000, // 5GB
+  pathPrefixes: ["/movies", "/tv"]
+};
 ```
 
 Good for: Consolidating significant media content

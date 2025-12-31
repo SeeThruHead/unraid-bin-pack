@@ -10,55 +10,55 @@ DiskStatsService fetches disk space information (total, free, used bytes) for di
 
 ```typescript
 interface DiskStatsService {
-  readonly getStats: (path: string) => Effect<DiskStats, DiskStatsError>
+  readonly getStats: (path: string) => Effect<DiskStats, DiskStatsError>;
 }
 
 interface DiskStats {
-  readonly totalBytes: number
-  readonly freeBytes: number
-  readonly usedBytes: number
+  readonly totalBytes: number;
+  readonly freeBytes: number;
+  readonly usedBytes: number;
 }
 ```
 
 ## Usage
 
 ```typescript
-import { Effect } from 'effect'
-import { DiskStatsServiceTag } from '@services/DiskStatsService'
+import { Effect } from "effect";
+import { DiskStatsServiceTag } from "@services/DiskStatsService";
 
 const program = Effect.gen(function* () {
-  const diskStats = yield* DiskStatsServiceTag
+  const diskStats = yield* DiskStatsServiceTag;
 
-  const stats = yield* diskStats.getStats('/mnt/disk1')
+  const stats = yield* diskStats.getStats("/mnt/disk1");
 
-  console.log(`Total: ${stats.totalBytes} bytes`)
-  console.log(`Free: ${stats.freeBytes} bytes`)
-  console.log(`Used: ${stats.usedBytes} bytes`)
+  console.log(`Total: ${stats.totalBytes} bytes`);
+  console.log(`Free: ${stats.freeBytes} bytes`);
+  console.log(`Used: ${stats.usedBytes} bytes`);
 
-  const usagePercent = (stats.usedBytes / stats.totalBytes) * 100
-  console.log(`Usage: ${usagePercent.toFixed(1)}%`)
-})
+  const usagePercent = (stats.usedBytes / stats.totalBytes) * 100;
+  console.log(`Usage: ${usagePercent.toFixed(1)}%`);
+});
 ```
 
 ## Error Handling
 
 ```typescript
 const program = Effect.gen(function* () {
-  const diskStats = yield* DiskStatsServiceTag
+  const diskStats = yield* DiskStatsServiceTag;
 
-  const stats = yield* diskStats.getStats('/mnt/disk1').pipe(
-    Effect.catchTag('DiskStatsError', error => {
-      console.error(`Failed to get stats: ${error.message}`)
+  const stats = yield* diskStats.getStats("/mnt/disk1").pipe(
+    Effect.catchTag("DiskStatsError", (error) => {
+      console.error(`Failed to get stats: ${error.message}`);
       return Effect.succeed({
         totalBytes: 0,
         freeBytes: 0,
-        usedBytes: 0,
-      })
+        usedBytes: 0
+      });
     })
-  )
+  );
 
-  return stats
-})
+  return stats;
+});
 ```
 
 ## See Also

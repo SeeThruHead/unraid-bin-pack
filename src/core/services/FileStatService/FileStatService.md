@@ -10,13 +10,13 @@ FileStatService fetches file metadata (size, permissions, timestamps) from the f
 
 ```typescript
 interface FileStatService {
-  readonly getStat: (path: string) => Effect<FileStat, FileStatError>
+  readonly getStat: (path: string) => Effect<FileStat, FileStatError>;
 }
 
 interface FileStat {
-  readonly sizeBytes: number
-  readonly isFile: boolean
-  readonly isDirectory: boolean
+  readonly sizeBytes: number;
+  readonly isFile: boolean;
+  readonly isDirectory: boolean;
   // ... other stat fields
 }
 ```
@@ -24,37 +24,35 @@ interface FileStat {
 ## Usage
 
 ```typescript
-import { Effect } from 'effect'
-import { FileStatServiceTag } from '@services/FileStatService'
+import { Effect } from "effect";
+import { FileStatServiceTag } from "@services/FileStatService";
 
 const program = Effect.gen(function* () {
-  const fileStat = yield* FileStatServiceTag
+  const fileStat = yield* FileStatServiceTag;
 
-  const stat = yield* fileStat.getStat('/mnt/disk1/movie.mkv')
+  const stat = yield* fileStat.getStat("/mnt/disk1/movie.mkv");
 
-  console.log(`Size: ${stat.sizeBytes} bytes`)
-  console.log(`Is file: ${stat.isFile}`)
-  console.log(`Is directory: ${stat.isDirectory}`)
-})
+  console.log(`Size: ${stat.sizeBytes} bytes`);
+  console.log(`Is file: ${stat.isFile}`);
+  console.log(`Is directory: ${stat.isDirectory}`);
+});
 ```
 
 ## Error Handling
 
 ```typescript
 const program = Effect.gen(function* () {
-  const fileStat = yield* FileStatServiceTag
+  const fileStat = yield* FileStatServiceTag;
 
-  const stat = yield* fileStat.getStat('/path/to/file').pipe(
+  const stat = yield* fileStat.getStat("/path/to/file").pipe(
     Effect.catchTags({
-      FileNotFound: () =>
-        Effect.fail(new Error('File not found')),
-      FilePermissionDenied: () =>
-        Effect.fail(new Error('Permission denied')),
+      FileNotFound: () => Effect.fail(new Error("File not found")),
+      FilePermissionDenied: () => Effect.fail(new Error("Permission denied"))
     })
-  )
+  );
 
-  return stat
-})
+  return stat;
+});
 ```
 
 ## Common Uses

@@ -13,15 +13,16 @@ The interactive module provides a user-friendly CLI experience where users are g
 Guides users through all plan configuration options.
 
 ```typescript
-export const interactivePlanPrompts = (
-  discoveredDisks: ReadonlyArray<Disk>
-) => Effect<PlanOptions, QuitException, Terminal>
+export const interactivePlanPrompts = (discoveredDisks: ReadonlyArray<Disk>) =>
+  Effect<PlanOptions, QuitException, Terminal>;
 ```
 
 **Parameters:**
+
 - `discoveredDisks` - Pre-discovered disks to show in prompts
 
 **Returns:**
+
 - Complete `PlanOptions` object from user input
 
 ## Prompt Flow
@@ -69,9 +70,7 @@ Human-readable sizes (MB, GB, etc.)
 Interactive tree UI for selecting specific paths to include:
 
 ```typescript
-const selectedDirs = yield* selectDirectoriesEffect(
-  discoveredDisks.map(d => d.path)
-)
+const selectedDirs = yield * selectDirectoriesEffect(discoveredDisks.map((d) => d.path));
 ```
 
 Displays selected paths or "All paths included" if none selected.
@@ -107,30 +106,30 @@ Enable debug logging? [no]:
 ## Usage Example
 
 ```typescript
-import { Effect, Console } from 'effect'
-import { interactivePlanPrompts } from './interactive'
-import { DiskServiceTag } from '@services/DiskService'
+import { Effect, Console } from "effect";
+import { interactivePlanPrompts } from "./interactive";
+import { DiskServiceTag } from "@services/DiskService";
 
 const program = Effect.gen(function* () {
-  const diskService = yield* DiskServiceTag
+  const diskService = yield* DiskServiceTag;
 
   // Discover disks
-  const paths = yield* diskService.autoDiscover()
-  const disks = yield* diskService.discover(paths)
+  const paths = yield* diskService.autoDiscover();
+  const disks = yield* diskService.discover(paths);
 
   if (disks.length === 0) {
-    yield* Console.error("No disks found")
-    return
+    yield* Console.error("No disks found");
+    return;
   }
 
   // Run interactive prompts
-  const options = yield* interactivePlanPrompts(disks)
+  const options = yield* interactivePlanPrompts(disks);
 
-  yield* Console.log(`Source: ${options.src ?? 'auto'}`)
-  yield* Console.log(`Destinations: ${options.dest ?? 'all'}`)
-  yield* Console.log(`Min space: ${options.minSpace ?? '50MB'}`)
+  yield* Console.log(`Source: ${options.src ?? "auto"}`);
+  yield* Console.log(`Destinations: ${options.dest ?? "all"}`);
+  yield* Console.log(`Min space: ${options.minSpace ?? "50MB"}`);
   // ... use options for plan generation
-})
+});
 ```
 
 ## Integration with runPlan
@@ -138,27 +137,25 @@ const program = Effect.gen(function* () {
 The `runPlan` handler automatically uses interactive mode when requested:
 
 ```typescript
-export const runPlan = (
-  options: PlanOptions,
-  isInteractive: boolean = false
-) => Effect.gen(function* () {
-  let finalOptions = options
+export const runPlan = (options: PlanOptions, isInteractive: boolean = false) =>
+  Effect.gen(function* () {
+    let finalOptions = options;
 
-  if (isInteractive) {
-    const discoveredDisks = yield* diskService.autoDiscover().pipe(
-      Effect.flatMap(paths => diskService.discover(paths))
-    )
+    if (isInteractive) {
+      const discoveredDisks = yield* diskService
+        .autoDiscover()
+        .pipe(Effect.flatMap((paths) => diskService.discover(paths)));
 
-    if (discoveredDisks.length === 0) {
-      yield* Console.error("\n❌ No disks found at /mnt/disk*\n")
-      return
+      if (discoveredDisks.length === 0) {
+        yield* Console.error("\n❌ No disks found at /mnt/disk*\n");
+        return;
+      }
+
+      finalOptions = yield* interactivePlanPrompts(discoveredDisks);
     }
 
-    finalOptions = yield* interactivePlanPrompts(discoveredDisks)
-  }
-
-  // ... continue with finalOptions
-})
+    // ... continue with finalOptions
+  });
 ```
 
 ## Prompt Types
@@ -168,10 +165,12 @@ export const runPlan = (
 Used for: source disk, destination disks, sizes, patterns, plan path
 
 ```typescript
-const src = yield* Prompt.text({
-  message: "Source disk to move files from",
-  default: "/mnt/disk1",
-})
+const src =
+  yield *
+  Prompt.text({
+    message: "Source disk to move files from",
+    default: "/mnt/disk1"
+  });
 ```
 
 ### Confirmation
@@ -179,10 +178,12 @@ const src = yield* Prompt.text({
 Used for: force overwrite, debug logging
 
 ```typescript
-const force = yield* Prompt.confirm({
-  message: "Force overwrite existing plan?",
-  initial: false,
-})
+const force =
+  yield *
+  Prompt.confirm({
+    message: "Force overwrite existing plan?",
+    initial: false
+  });
 ```
 
 ### Tree Selection
@@ -190,7 +191,7 @@ const force = yield* Prompt.confirm({
 Custom directory tree selection (see `treeSelect.ts`):
 
 ```typescript
-const selectedDirs = yield* selectDirectoriesEffect(diskPaths)
+const selectedDirs = yield * selectDirectoriesEffect(diskPaths);
 ```
 
 ## Default Values
@@ -213,11 +214,9 @@ const selectedDirs = yield* selectDirectoriesEffect(diskPaths)
 Automatically suggests the disk with the most free space as source:
 
 ```typescript
-const leastFullDisk = discoveredDisks
-  .slice()
-  .sort((a, b) => b.freeBytes - a.freeBytes)[0]
+const leastFullDisk = discoveredDisks.slice().sort((a, b) => b.freeBytes - a.freeBytes)[0];
 
-const srcDefault = leastFullDisk?.path ?? ""
+const srcDefault = leastFullDisk?.path ?? "";
 ```
 
 ### Empty Input Handling
@@ -226,8 +225,8 @@ Many prompts treat empty input as "use default" or "skip this filter":
 
 ```typescript
 Prompt.text({ message: "...", default: "..." }).pipe(
-  Effect.map(s => s.trim() === "" ? undefined : s.trim())
-)
+  Effect.map((s) => (s.trim() === "" ? undefined : s.trim()))
+);
 ```
 
 ## User Experience

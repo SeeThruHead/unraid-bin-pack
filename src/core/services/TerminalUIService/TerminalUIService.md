@@ -10,17 +10,14 @@ TerminalUIService provides interactive CLI features like prompts, confirmations,
 
 ```typescript
 interface TerminalUIService {
-  readonly prompt: (message: string) => Effect<string>
-  readonly confirm: (message: string) => Effect<boolean>
-  readonly select: <T>(
-    message: string,
-    choices: Choice<T>[]
-  ) => Effect<T>
+  readonly prompt: (message: string) => Effect<string>;
+  readonly confirm: (message: string) => Effect<boolean>;
+  readonly select: <T>(message: string, choices: Choice<T>[]) => Effect<T>;
 }
 
 interface Choice<T> {
-  readonly label: string
-  readonly value: T
+  readonly label: string;
+  readonly value: T;
 }
 ```
 
@@ -29,50 +26,47 @@ interface Choice<T> {
 ### Text Input
 
 ```typescript
-import { Effect } from 'effect'
-import { TerminalUIServiceTag } from '@services/TerminalUIService'
+import { Effect } from "effect";
+import { TerminalUIServiceTag } from "@services/TerminalUIService";
 
 const program = Effect.gen(function* () {
-  const ui = yield* TerminalUIServiceTag
+  const ui = yield* TerminalUIServiceTag;
 
-  const diskPath = yield* ui.prompt('Enter disk path:')
-  console.log(`You entered: ${diskPath}`)
-})
+  const diskPath = yield* ui.prompt("Enter disk path:");
+  console.log(`You entered: ${diskPath}`);
+});
 ```
 
 ### Confirmation
 
 ```typescript
 const program = Effect.gen(function* () {
-  const ui = yield* TerminalUIServiceTag
+  const ui = yield* TerminalUIServiceTag;
 
-  const confirmed = yield* ui.confirm('Execute transfer plan?')
+  const confirmed = yield* ui.confirm("Execute transfer plan?");
 
   if (confirmed) {
-    console.log('Executing...')
+    console.log("Executing...");
   } else {
-    console.log('Cancelled')
+    console.log("Cancelled");
   }
-})
+});
 ```
 
 ### Selection
 
 ```typescript
 const program = Effect.gen(function* () {
-  const ui = yield* TerminalUIServiceTag
+  const ui = yield* TerminalUIServiceTag;
 
-  const algorithm = yield* ui.select(
-    'Choose consolidation algorithm:',
-    [
-      { label: 'Simple (recommended)', value: 'simple' },
-      { label: 'Advanced', value: 'advanced' },
-      { label: 'Custom', value: 'custom' },
-    ]
-  )
+  const algorithm = yield* ui.select("Choose consolidation algorithm:", [
+    { label: "Simple (recommended)", value: "simple" },
+    { label: "Advanced", value: "advanced" },
+    { label: "Custom", value: "custom" }
+  ]);
 
-  console.log(`Selected: ${algorithm}`)
-})
+  console.log(`Selected: ${algorithm}`);
+});
 ```
 
 ## See Also

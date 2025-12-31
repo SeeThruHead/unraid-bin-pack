@@ -10,13 +10,13 @@ PlanScriptGenerator converts a `MovePlan` into a bash script that can be execute
 
 ```typescript
 interface PlanGeneratorService {
-  readonly generate: (options: PlanGeneratorOptions) => Effect<string>
+  readonly generate: (options: PlanGeneratorOptions) => Effect<string>;
 }
 
 interface PlanGeneratorOptions {
-  readonly moves: readonly FileMove[]
-  readonly sourceDisk: string
-  readonly concurrency: number
+  readonly moves: readonly FileMove[];
+  readonly sourceDisk: string;
+  readonly concurrency: number;
 }
 ```
 
@@ -33,86 +33,84 @@ interface PlanGeneratorOptions {
 ### Basic Script Generation
 
 ```typescript
-import { Effect } from 'effect'
-import { PlanGeneratorServiceTag } from '@services/PlanGenerator'
+import { Effect } from "effect";
+import { PlanGeneratorServiceTag } from "@services/PlanGenerator";
 
 const program = Effect.gen(function* () {
-  const generator = yield* PlanGeneratorServiceTag
+  const generator = yield* PlanGeneratorServiceTag;
 
   const script = yield* generator.generate({
     moves: [
       {
         file: {
-          absolutePath: '/mnt/disk1/movie.mkv',
-          relativePath: 'movie.mkv',
+          absolutePath: "/mnt/disk1/movie.mkv",
+          relativePath: "movie.mkv",
           sizeBytes: 10_000_000_000,
-          diskPath: '/mnt/disk1',
+          diskPath: "/mnt/disk1"
         },
-        targetDiskPath: '/mnt/disk2',
-        destinationPath: '/mnt/disk2/movie.mkv',
-        status: 'pending',
-      },
+        targetDiskPath: "/mnt/disk2",
+        destinationPath: "/mnt/disk2/movie.mkv",
+        status: "pending"
+      }
     ],
-    sourceDisk: '/mnt/disk1',
-    concurrency: 4,
-  })
+    sourceDisk: "/mnt/disk1",
+    concurrency: 4
+  });
 
-  console.log(script)
-})
+  console.log(script);
+});
 ```
 
 ### Save Script to File
 
 ```typescript
-import { Effect } from 'effect'
-import { FileSystem } from '@effect/platform'
-import { PlanGeneratorServiceTag } from '@services/PlanGenerator'
+import { Effect } from "effect";
+import { FileSystem } from "@effect/platform";
+import { PlanGeneratorServiceTag } from "@services/PlanGenerator";
 
 const program = Effect.gen(function* () {
-  const generator = yield* PlanGeneratorServiceTag
-  const fs = yield* FileSystem.FileSystem
+  const generator = yield* PlanGeneratorServiceTag;
+  const fs = yield* FileSystem.FileSystem;
 
   const script = yield* generator.generate({
     moves: plan.moves,
-    sourceDisk: '/mnt/disk1',
-    concurrency: 4,
-  })
+    sourceDisk: "/mnt/disk1",
+    concurrency: 4
+  });
 
-  yield* fs.writeFileString('plan.sh', script)
-  yield* fs.chmod('plan.sh', 0o755)  // Make executable
+  yield* fs.writeFileString("plan.sh", script);
+  yield* fs.chmod("plan.sh", 0o755); // Make executable
 
-  console.log('Script saved to plan.sh')
-})
+  console.log("Script saved to plan.sh");
+});
 ```
 
 ### Execute Generated Script
 
 ```typescript
-import { Effect } from 'effect'
-import { PlanGeneratorServiceTag } from '@services/PlanGenerator'
-import { ShellServiceTag } from '@services/ShellService'
+import { Effect } from "effect";
+import { PlanGeneratorServiceTag } from "@services/PlanGenerator";
+import { ShellServiceTag } from "@services/ShellService";
 
 const program = Effect.gen(function* () {
-  const generator = yield* PlanGeneratorServiceTag
-  const shell = yield* ShellServiceTag
+  const generator = yield* PlanGeneratorServiceTag;
+  const shell = yield* ShellServiceTag;
 
   // Generate script
   const script = yield* generator.generate({
     moves: plan.moves,
-    sourceDisk: '/mnt/disk1',
-    concurrency: 2,
-  })
+    sourceDisk: "/mnt/disk1",
+    concurrency: 2
+  });
 
   // Save to file
-  yield* Effect.promise(() =>
-    Bun.write('plan.sh', script)
-  )
+  yield* Effect.promise(() => Bun.write("plan.sh", script));
 
   // Execute
-  yield* shell.exec('chmod +x plan.sh && ./plan.sh')
+  yield* shell.exec("chmod +x plan.sh && ./plan.sh");
 
-  console.log('Transfer complete!')
-})
+  console.log("Transfer complete!");
+});
 ```
 
 ## Generated Script Format
@@ -183,6 +181,7 @@ Each batch runs as a background job (`&`), then `wait` ensures all complete befo
 ### 3. File List Format
 
 Uses `--files-from` with heredoc for clean file list handling:
+
 - No need to escape special characters in filenames
 - Easy to read and debug
 - Efficient for large file lists
@@ -213,10 +212,10 @@ Moves with status !== 'pending' are excluded from the generated script:
 
 ```typescript
 const moves = [
-  { status: 'pending', /* ... */ },    // ✅ Included
-  { status: 'skipped', /* ... */ },    // ❌ Excluded
-  { status: 'completed', /* ... */ },  // ❌ Excluded
-]
+  { status: "pending" /* ... */ }, // ✅ Included
+  { status: "skipped" /* ... */ }, // ❌ Excluded
+  { status: "completed" /* ... */ } // ❌ Excluded
+];
 ```
 
 ## Empty Plans

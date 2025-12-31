@@ -6,10 +6,10 @@ A `FileEntry` represents metadata about a single file on disk.
 
 ```typescript
 interface FileEntry {
-  readonly absolutePath: string  // Full path including disk mount
-  readonly relativePath: string  // Path relative to disk mount
-  readonly sizeBytes: number     // File size in bytes
-  readonly diskPath: string      // Mount point of containing disk
+  readonly absolutePath: string; // Full path including disk mount
+  readonly relativePath: string; // Path relative to disk mount
+  readonly sizeBytes: number; // File size in bytes
+  readonly diskPath: string; // Mount point of containing disk
 }
 ```
 
@@ -44,19 +44,19 @@ Example: `/mnt/disk1`
 File entries are typically created by the `ScannerService` when scanning disks:
 
 ```typescript
-import { Effect } from 'effect'
-import { ScannerServiceTag } from '@services/ScannerService'
+import { Effect } from "effect";
+import { ScannerServiceTag } from "@services/ScannerService";
 
 const program = Effect.gen(function* () {
-  const scanner = yield* ScannerServiceTag
+  const scanner = yield* ScannerServiceTag;
 
   // Scan disk and get all file entries
-  const worldView = yield* scanner.scan(['/mnt/disk1', '/mnt/disk2'])
+  const worldView = yield* scanner.scan(["/mnt/disk1", "/mnt/disk2"]);
 
-  worldView.files.forEach(file => {
-    console.log(`${file.relativePath}: ${file.sizeBytes} bytes`)
-  })
-})
+  worldView.files.forEach((file) => {
+    console.log(`${file.relativePath}: ${file.sizeBytes} bytes`);
+  });
+});
 ```
 
 ## See Also
