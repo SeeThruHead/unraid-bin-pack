@@ -1,72 +1,67 @@
 export const mockDisks = [
   {
-    path: '/mnt/disk1',
-    totalBytes: 4000000000000, // 4TB
-    freeBytes: 500000000000,   // 500GB
+    path: "/mnt/disk1",
+    totalBytes: 4000000000000,
+    freeBytes: 500000000000,
     totalGB: 3725.29,
     freeGB: 465.66,
-    usedPct: 87.5,
+    usedPct: 87.5
   },
   {
-    path: '/mnt/disk2',
+    path: "/mnt/disk2",
     totalBytes: 4000000000000,
-    freeBytes: 1500000000000, // 1.5TB
+    freeBytes: 1500000000000,
     totalGB: 3725.29,
     freeGB: 1396.98,
-    usedPct: 62.5,
+    usedPct: 62.5
   },
   {
-    path: '/mnt/disk3',
-    totalBytes: 8000000000000, // 8TB
-    freeBytes: 6000000000000,  // 6TB
+    path: "/mnt/disk3",
+    totalBytes: 8000000000000,
+    freeBytes: 6000000000000,
     totalGB: 7450.58,
     freeGB: 5587.94,
-    usedPct: 25.0,
-  },
-]
+    usedPct: 25.0
+  }
+];
 
 export const mockPatterns = [
   {
-    pattern: '/Movies',
-    name: 'Movies',
+    pattern: "/Movies",
+    name: "Movies",
     children: [
-      'Action Movies (2023)',
-      'Comedy Films (2022)',
-      'Drama Collection (2024)',
-      'Sci-Fi Classics (2021)',
-    ],
+      "Action Movies (2023)",
+      "Comedy Films (2022)",
+      "Drama Collection (2024)",
+      "Sci-Fi Classics (2021)"
+    ]
   },
   {
-    pattern: '/TV',
-    name: 'TV',
+    pattern: "/TV",
+    name: "TV",
     children: [
-      'Breaking Bad (2008)',
-      'Game of Thrones (2011)',
-      'The Office (2005)',
-      'Stranger Things (2016)',
-    ],
+      "Breaking Bad (2008)",
+      "Game of Thrones (2011)",
+      "The Office (2005)",
+      "Stranger Things (2016)"
+    ]
   },
   {
-    pattern: '/Anime',
-    name: 'Anime',
+    pattern: "/Anime",
+    name: "Anime",
     children: [
-      'Attack on Titan (2013)',
-      'Death Note (2006)',
-      'One Piece (1999)',
-      'Cowboy Bebop (1998)',
-    ],
+      "Attack on Titan (2013)",
+      "Death Note (2006)",
+      "One Piece (1999)",
+      "Cowboy Bebop (1998)"
+    ]
   },
   {
-    pattern: '/Music',
-    name: 'Music',
-    children: [
-      'Rock',
-      'Jazz',
-      'Classical',
-      'Electronic',
-    ],
-  },
-]
+    pattern: "/Music",
+    name: "Music",
+    children: ["Rock", "Jazz", "Classical", "Electronic"]
+  }
+];
 
 export const mockPlanResult = {
   script: `#!/bin/bash
@@ -93,26 +88,26 @@ log "All transfers completed successfully!"
 `,
   stats: {
     movesPlanned: 42,
-    bytesConsolidated: 134744072192, // ~125.5GB
+    bytesConsolidated: 134744072192
   },
   diskProjections: [
     {
-      path: '/mnt/disk1',
+      path: "/mnt/disk1",
       totalBytes: 4000000000000,
       currentFree: 500000000000,
-      freeAfter: 634744072192, // 500GB + 125.5GB
+      freeAfter: 634744072192
     },
     {
-      path: '/mnt/disk2',
+      path: "/mnt/disk2",
       totalBytes: 4000000000000,
       currentFree: 1500000000000,
-      freeAfter: 1413678387200, // 1.5TB - 80.3GB
+      freeAfter: 1413678387200
     },
     {
-      path: '/mnt/disk3',
+      path: "/mnt/disk3",
       totalBytes: 8000000000000,
       currentFree: 6000000000000,
-      freeAfter: 5951465684992, // 6TB - 45.2GB
-    },
-  ],
-}
+      freeAfter: 5951465684992
+    }
+  ]
+};

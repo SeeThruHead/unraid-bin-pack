@@ -1,7 +1,7 @@
 FROM oven/bun:1.3-alpine
 
-# Install rsync for file transfers
-RUN apk add --no-cache rsync
+# Install rsync for file transfers and bash for script execution
+RUN apk add --no-cache rsync bash
 
 WORKDIR /app
 

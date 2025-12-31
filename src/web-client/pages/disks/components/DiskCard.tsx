@@ -1,38 +1,35 @@
-import { Card, Checkbox, Text, Group, Stack, Progress, ThemeIcon } from '@mantine/core'
-import { IconDeviceFloppy } from '@tabler/icons-react'
-import type { DiskResponse } from '../../../types'
+import { Card, Checkbox, Text, Group, Stack, Progress, ThemeIcon } from "@mantine/core";
+import { IconDeviceFloppy } from "@tabler/icons-react";
+import type { DiskResponse } from "../../../types";
+import { calculateUsedPercent } from "../../../lib/diskCalculations";
 
-const formatBytes = (bytes: number): string =>
-  (bytes / 1024 / 1024 / 1024).toFixed(1)
-
-const calculateUsedPercent = (totalBytes: number, freeBytes: number): number =>
-  ((totalBytes - freeBytes) / totalBytes * 100)
+const formatGB = (bytes: number): string => (bytes / 1024 / 1024 / 1024).toFixed(1);
 
 interface DiskCardProps {
-  disk: DiskResponse
-  checked: boolean
-  onChange: (checked: boolean) => void
+  disk: DiskResponse;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
 }
 
 export function DiskCard({ disk, checked, onChange }: DiskCardProps) {
-  const usedPercent = calculateUsedPercent(disk.totalBytes, disk.freeBytes)
-  const freeGB = formatBytes(disk.freeBytes)
-  const totalGB = formatBytes(disk.totalBytes)
+  const usedPercent = calculateUsedPercent(disk.totalBytes, disk.freeBytes);
+  const freeGB = formatGB(disk.freeBytes);
+  const totalGB = formatGB(disk.totalBytes);
 
   return (
     <Card
       withBorder
       padding="md"
       radius="md"
-      style={{ cursor: 'pointer', transition: 'transform 0.1s' }}
+      style={{ cursor: "pointer", transition: "transform 0.1s" }}
       onClick={() => onChange(!checked)}
     >
       <Group wrap="nowrap" align="center" gap="md">
         <Checkbox
           checked={checked}
           onChange={(e) => {
-            e.stopPropagation()
-            onChange(e.currentTarget.checked)
+            e.stopPropagation();
+            onChange(e.currentTarget.checked);
           }}
           size="md"
         />
@@ -42,11 +39,13 @@ export function DiskCard({ disk, checked, onChange }: DiskCardProps) {
         </ThemeIcon>
 
         <Stack gap="xs" style={{ flex: 1 }}>
-          <Text fw={600} size="sm">{disk.path}</Text>
+          <Text fw={600} size="sm">
+            {disk.path}
+          </Text>
 
           <Progress
             value={usedPercent}
-            color={usedPercent > 90 ? 'red' : usedPercent > 75 ? 'yellow' : 'blue'}
+            color={usedPercent > 90 ? "red" : usedPercent > 75 ? "yellow" : "blue"}
             size="sm"
           />
 
@@ -61,5 +60,5 @@ export function DiskCard({ disk, checked, onChange }: DiskCardProps) {
         </Stack>
       </Group>
     </Card>
-  )
+  );
 }

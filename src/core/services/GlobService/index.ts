@@ -1,1 +1,1 @@
-export * from "./GlobService"
+export * from "./GlobService";

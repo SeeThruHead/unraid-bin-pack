@@ -1,26 +1,42 @@
-import { useState } from 'react'
-import { Redirect } from 'wouter'
-import { Stack, Alert, Accordion, Text, Code, Loader, Center } from '@mantine/core'
-import { IconCheck } from '@tabler/icons-react'
-import { PlanSummary } from './components/PlanSummary'
-import { DiskStatsTable } from './components/DiskStatsTable'
-import { ExecutionPanel } from './components/ExecutionPanel'
-import { ExecutionSummary } from './components/ExecutionSummary'
-import type { PlanResponse, DiskResponse } from '../../types'
+import { useState, useCallback } from "react";
+import { Redirect } from "wouter";
+import { Stack, Alert, Accordion, Text, Code, Loader, Center } from "@mantine/core";
+import { IconCheck } from "@tabler/icons-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { PlanSummary } from "./components/PlanSummary";
+import { DiskStatsTable } from "./components/DiskStatsTable";
+import { ExecutionPanel } from "./components/ExecutionPanel";
+import { ExecutionSummary } from "./components/ExecutionSummary";
+import type { PlanResponse, DiskResponse } from "../../types";
 
 type ExecutionResult = {
-  success: boolean
-  output: string
-  summary?: unknown
-}
+  success: boolean;
+  output: string;
+  summary?: unknown;
+};
 
 interface ResultsPageProps {
-  result: (PlanResponse & { selectedDiskPaths?: string[] }) | { error: string } | null
+  result: (PlanResponse & { selectedDiskPaths?: string[] }) | { error: string } | null;
 }
 
 export function ResultsPage({ result }: ResultsPageProps) {
-  const [actualDiskSpace, setActualDiskSpace] = useState<DiskResponse[]>([])
-  const [executionResult, setExecutionResult] = useState<{ result: ExecutionResult; dryRun: boolean } | null>(null)
+  const queryClient = useQueryClient();
+  const [actualDiskSpace, setActualDiskSpace] = useState<DiskResponse[]>([]);
+  const [executionResult, setExecutionResult] = useState<{
+    result: ExecutionResult;
+    dryRun: boolean;
+  } | null>(null);
+
+  const handleExecutionComplete = useCallback(
+    (execResult: { result: ExecutionResult; dryRun: boolean }) => {
+      setExecutionResult(execResult);
+      // Invalidate disk stats when actual execution completes (not dry run)
+      if (!execResult.dryRun) {
+        queryClient.invalidateQueries({ queryKey: ["disks"] });
+      }
+    },
+    [queryClient]
+  );
 
   // Show loading state while waiting for result
   if (!result) {
@@ -28,15 +44,15 @@ export function ResultsPage({ result }: ResultsPageProps) {
       <Center h={200}>
         <Loader color="yellow" />
       </Center>
-    )
+    );
   }
 
   // If there's an error, redirect back
-  if ('error' in result) {
-    return <Redirect to="/" />
+  if ("error" in result) {
+    return <Redirect to="/" />;
   }
 
-  const selectedDiskPaths = result.selectedDiskPaths || []
+  const selectedDiskPaths = result.selectedDiskPaths || [];
 
   return (
     <Stack gap="lg" mt="md">
@@ -83,8 +99,8 @@ export function ResultsPage({ result }: ResultsPageProps) {
         diskProjections={result.diskProjections}
         selectedDiskPaths={selectedDiskPaths}
         onVerify={setActualDiskSpace}
-        onExecutionComplete={setExecutionResult}
+        onExecutionComplete={handleExecutionComplete}
       />
     </Stack>
-  )
+  );
 }

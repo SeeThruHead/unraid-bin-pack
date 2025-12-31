@@ -1,19 +1,22 @@
-import { Stack, Text, SimpleGrid, Tooltip } from '@mantine/core'
-import { SourceDiskCard } from './SourceDiskCard'
-import type { DiskResponse } from '../../../types'
+import { Stack, Text, SimpleGrid, Tooltip } from "@mantine/core";
+import { SourceDiskCard } from "./SourceDiskCard";
+import { useSourceDisk } from "../../../store/planStore";
+import type { DiskResponse } from "../../../types";
 
 interface SourceDiskSelectorProps {
-  disks: DiskResponse[]
-  selectedSource: string
-  onChange: (source: string) => void
+  disks: DiskResponse[];
 }
 
-export function SourceDiskSelector({ disks, selectedSource, onChange }: SourceDiskSelectorProps) {
+export function SourceDiskSelector({ disks }: SourceDiskSelectorProps) {
+  const [selectedSource, setSelectedSource] = useSourceDisk();
+
   return (
     <Stack gap="md" mt="xl">
       <div>
         <Text fw={500}>Source Disk (Optional)</Text>
-        <Text size="sm" c="dimmed">Select a specific disk to move files from, or use auto-select to pack tightly</Text>
+        <Text size="sm" c="dimmed">
+          Select a specific disk to move files from, or use auto-select to pack tightly
+        </Text>
       </div>
 
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
@@ -25,8 +28,8 @@ export function SourceDiskSelector({ disks, selectedSource, onChange }: SourceDi
           <div>
             <SourceDiskCard
               isAuto
-              checked={selectedSource === ''}
-              onChange={() => onChange('')}
+              checked={selectedSource === ""}
+              onChange={() => setSelectedSource("")}
             />
           </div>
         </Tooltip>
@@ -35,10 +38,10 @@ export function SourceDiskSelector({ disks, selectedSource, onChange }: SourceDi
             key={disk.path}
             disk={disk}
             checked={selectedSource === disk.path}
-            onChange={() => onChange(disk.path)}
+            onChange={() => setSelectedSource(disk.path)}
           />
         ))}
       </SimpleGrid>
     </Stack>
-  )
+  );
 }

@@ -1,34 +1,33 @@
-import { Hono } from 'hono'
-import { cors } from 'hono/cors'
-import { mockDisks, mockPatterns, mockPlanResult } from './mock-data'
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { mockDisks, mockPatterns, mockPlanResult } from "./mock-data";
 
-const app = new Hono()
+const app = new Hono();
 
-app.use('/*', cors())
+app.use("/*", cors());
 
 const api = new Hono()
-  .get('/disks', (c) => c.json(mockDisks))
-  .get('/scan-patterns', (c) => c.json(mockPatterns))
-  .post('/plan', async (c) => {
-    // Simulate async work
-    await new Promise(resolve => setTimeout(resolve, 500))
-    return c.json(mockPlanResult)
+  .get("/disks", (c) => c.json(mockDisks))
+  .get("/scan-patterns", (c) => c.json(mockPatterns))
+  .post("/plan", async (c) => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    return c.json(mockPlanResult);
   })
-  .post('/apply', async (c) => {
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    return c.json({ success: true })
+  .post("/apply", async (c) => {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    return c.json({ success: true });
   })
-  .get('/show', (c) => c.json({ script: mockPlanResult.script }))
+  .get("/show", (c) => c.json({ script: mockPlanResult.script }));
 
-app.route('/api', api)
+app.route("/api", api);
 
-const port = 3001
+const port = 3001;
 
-console.log(`🎭 Mock server running at http://localhost:${port}`)
-console.log(`   API endpoints available at http://localhost:${port}/api`)
-console.log(`   Run 'bun run web:dev' in another terminal for the UI`)
+console.warn(`🎭 Mock server running at http://localhost:${port}`);
+console.warn(`   API endpoints available at http://localhost:${port}/api`);
+console.warn(`   Run 'bun run web:dev' in another terminal for the UI`);
 
 export default {
   port,
-  fetch: app.fetch,
-}
+  fetch: app.fetch
+};

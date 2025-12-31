@@ -1,52 +1,43 @@
-import { Stack, TextInput, Switch } from '@mantine/core'
+import { Stack, TextInput, Switch } from "@mantine/core";
+import {
+  useMinSplitSize,
+  useMoveAsFolderThreshold,
+  useDebug,
+  useForce
+} from "../../../store/planStore";
 
-interface AdvancedOptionsProps {
-  minSplitSize: string
-  moveAsFolderThreshold: string
-  debug: boolean
-  force: boolean
-  onChangeMinSplitSize: (value: string) => void
-  onChangeMoveAsFolderThreshold: (value: string) => void
-  onChangeDebug: (checked: boolean) => void
-  onChangeForce: (checked: boolean) => void
-}
+export function AdvancedOptions() {
+  const [minSplitSize, setMinSplitSize] = useMinSplitSize();
+  const [moveAsFolderThreshold, setMoveAsFolderThreshold] = useMoveAsFolderThreshold();
+  const [debug, setDebug] = useDebug();
+  const [force, setForce] = useForce();
 
-export function AdvancedOptions({
-  minSplitSize,
-  moveAsFolderThreshold,
-  debug,
-  force,
-  onChangeMinSplitSize,
-  onChangeMoveAsFolderThreshold,
-  onChangeDebug,
-  onChangeForce,
-}: AdvancedOptionsProps) {
   return (
     <Stack gap="md">
       <TextInput
         label="Minimum Split Size"
         description="Minimum size for folder splitting optimization"
         value={minSplitSize}
-        onChange={(e) => onChangeMinSplitSize(e.currentTarget.value)}
+        onChange={(e) => setMinSplitSize(e.currentTarget.value)}
       />
       <TextInput
         label="Move as Folder Threshold"
         description="Threshold for moving entire folders (0.0 - 1.0)"
         value={moveAsFolderThreshold}
-        onChange={(e) => onChangeMoveAsFolderThreshold(e.currentTarget.value)}
+        onChange={(e) => setMoveAsFolderThreshold(e.currentTarget.value)}
       />
       <Switch
         label="Debug Mode"
         description="Enable verbose logging"
         checked={debug}
-        onChange={(e) => onChangeDebug(e.currentTarget.checked)}
+        onChange={(e) => setDebug(e.currentTarget.checked)}
       />
       <Switch
         label="Force Mode"
         description="Skip safety checks"
         checked={force}
-        onChange={(e) => onChangeForce(e.currentTarget.checked)}
+        onChange={(e) => setForce(e.currentTarget.checked)}
       />
     </Stack>
-  )
+  );
 }

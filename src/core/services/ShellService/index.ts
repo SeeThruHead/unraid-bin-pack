@@ -1,1 +1,1 @@
-export * from "./ShellService"
+export * from "./ShellService";

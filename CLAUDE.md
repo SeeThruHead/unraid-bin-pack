@@ -7,9 +7,7 @@
 
 ## Current Work
 
-**IMPORTANT: Check `TASKS.md` for the current task and implementation plan.**
-
-The current task is fixing the WorldView issue in iterative emptying - see TASKS.md for full details.
+No active tasks - codebase is clean and well-organized.
 
 ## Bun Runtime
 

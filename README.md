@@ -71,6 +71,7 @@ docker run --rm -v /mnt:/mnt -v /mnt/user/appdata/unraid-bin-pack:/config seethr
 **Note:** Plans created via CLI can be applied via web UI and vice versa - they share the same `/config/plan.sh` file.
 
 By default, `plan` will:
+
 - Auto-discover disks at `/mnt/disk*`
 - Consolidate files from the **least full** disk to other disks
 - Only move files under `/media/Movies`, `/media/TV`, `/media/Anime` (configurable with `--path-filter`)
@@ -98,6 +99,7 @@ Options:
 ```
 
 The web interface provides:
+
 - Clean disk selection with card-based layout
 - Pattern-based folder selection (matches folders across all disks)
 - File type filtering with "Everything" option
@@ -213,12 +215,12 @@ The project follows a **layered architecture** with strict dependency rules, bui
 
 ### Layers Explained
 
-| Layer | Purpose | Dependencies |
-|-------|---------|--------------|
-| **CLI** | Parse arguments, orchestrate commands, format output | Services |
-| **Services** | Business logic (scanning, packing, transferring) | Infrastructure, Domain |
-| **Infrastructure** | External I/O (filesystem, shell, storage) | Domain |
-| **Domain** | Pure data types and domain logic | None |
+| Layer              | Purpose                                              | Dependencies           |
+| ------------------ | ---------------------------------------------------- | ---------------------- |
+| **CLI**            | Parse arguments, orchestrate commands, format output | Services               |
+| **Services**       | Business logic (scanning, packing, transferring)     | Infrastructure, Domain |
+| **Infrastructure** | External I/O (filesystem, shell, storage)            | Domain                 |
+| **Domain**         | Pure data types and domain logic                     | None                   |
 
 ### Key Patterns
 
@@ -254,14 +256,14 @@ All errors are discriminated unions using `Data.TaggedError`:
 
 ```typescript
 export class DiskNotFound extends Data.TaggedError("DiskNotFound")<{
-  readonly path: string
+  readonly path: string;
 }> {}
 
 export class DiskPermissionDenied extends Data.TaggedError("DiskPermissionDenied")<{
-  readonly path: string
+  readonly path: string;
 }> {}
 
-export type DiskError = DiskNotFound | DiskPermissionDenied | DiskNotMountPoint
+export type DiskError = DiskNotFound | DiskPermissionDenied | DiskNotMountPoint;
 ```
 
 This enables exhaustive error handling and user-friendly messages.
@@ -270,11 +272,12 @@ This enables exhaustive error handling and user-friendly messages.
 
 Plans are generated as executable bash scripts using `PlanScriptGenerator`:
 
-| File | Format | Features |
-|------|--------|----------|
+| File      | Format      | Features                                              |
+| --------- | ----------- | ----------------------------------------------------- |
 | `plan.sh` | Bash script | Human-readable, rsync commands, idempotent, auditable |
 
 The script contains:
+
 - Metadata header (generated date, source disk, file counts)
 - Batched rsync commands (grouped by target disk)
 - Parallel execution with background processes (`&` and `wait`)
@@ -347,7 +350,7 @@ bun run src/main.ts plan --help
 docker build -t seethruhead/unraid-bin-pack:latest .
 
 # Build web server image
-docker build -f Dockerfile.web -t seethruhead/unraid-bin-pack:web .
+docker build -f Dockerfile.web-v2 -t seethruhead/unraid-bin-pack:web .
 
 # Push both images
 docker push seethruhead/unraid-bin-pack:latest
@@ -355,7 +358,7 @@ docker push seethruhead/unraid-bin-pack:web
 
 # Or use test tags for testing
 docker build -t seethruhead/unraid-bin-pack:test .
-docker build -f Dockerfile.web -t seethruhead/unraid-bin-pack:test-web .
+docker build -f Dockerfile.web-v2 -t seethruhead/unraid-bin-pack:test-web .
 docker push seethruhead/unraid-bin-pack:test
 docker push seethruhead/unraid-bin-pack:test-web
 ```
@@ -366,11 +369,11 @@ The project has comprehensive test coverage across all layers.
 
 ### Test Categories
 
-| Category | Files | Purpose |
-|----------|-------|---------|
-| **Unit** | `*.test.ts` in same dir | Test individual modules in isolation |
-| **Integration** | `integration/*.test.ts` | Test handler flows with mocked I/O |
-| **Infra Integration** | `infra.integration.test.ts` | Test real filesystem operations |
+| Category              | Files                       | Purpose                              |
+| --------------------- | --------------------------- | ------------------------------------ |
+| **Unit**              | `*.test.ts` in same dir     | Test individual modules in isolation |
+| **Integration**       | `integration/*.test.ts`     | Test handler flows with mocked I/O   |
+| **Infra Integration** | `infra.integration.test.ts` | Test real filesystem operations      |
 
 ### Running Tests
 

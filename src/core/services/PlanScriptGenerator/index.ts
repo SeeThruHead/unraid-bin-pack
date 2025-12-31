@@ -1,1 +1,1 @@
-export { BashRsyncPlanGenerator } from "./PlanScriptGenerator"
+export { BashRsyncPlanGenerator } from "./PlanScriptGenerator";

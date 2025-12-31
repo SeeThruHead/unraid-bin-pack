@@ -5,6 +5,6 @@ export {
   DiskNotADirectory,
   DiskNotAMountPoint,
   DiskPermissionDenied,
-  DiskStatsFailed,
-} from "./DiskService"
-export type { DiskService } from "./DiskService"
+  DiskStatsFailed
+} from "./DiskService";
+export type { DiskService } from "./DiskService";

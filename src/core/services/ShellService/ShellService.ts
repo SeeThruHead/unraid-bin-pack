@@ -1,25 +1,22 @@
-import { Context, Data, Effect, Layer } from "effect"
+import { Context, Data, Effect, Layer } from "effect";
 
 export class ShellError extends Data.TaggedError("ShellError")<{
-  readonly message: string
-  readonly command: string
-  readonly exitCode?: number
+  readonly message: string;
+  readonly command: string;
+  readonly exitCode?: number;
 }> {}
 
 export interface ShellResult {
-  readonly stdout: string
-  readonly stderr: string
-  readonly exitCode: number
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly exitCode: number;
 }
 
 export interface ShellService {
-  readonly exec: (command: string) => Effect.Effect<ShellResult, ShellError>
+  readonly exec: (command: string) => Effect.Effect<ShellResult, ShellError>;
 }
 
-export class ShellServiceTag extends Context.Tag("ShellService")<
-  ShellServiceTag,
-  ShellService
->() {}
+export class ShellServiceTag extends Context.Tag("ShellService")<ShellServiceTag, ShellService>() {}
 
 export const ShellServiceLive = Layer.succeed(ShellServiceTag, {
   exec: (command) =>
@@ -27,15 +24,15 @@ export const ShellServiceLive = Layer.succeed(ShellServiceTag, {
       try: async () => {
         const proc = Bun.spawn(["sh", "-c", command], {
           stdout: "pipe",
-          stderr: "pipe",
-        })
+          stderr: "pipe"
+        });
 
-        const stdout = await new Response(proc.stdout).text()
-        const stderr = await new Response(proc.stderr).text()
-        const exitCode = await proc.exited
+        const stdout = await new Response(proc.stdout).text();
+        const stderr = await new Response(proc.stderr).text();
+        const exitCode = await proc.exited;
 
-        return { stdout, stderr, exitCode }
+        return { stdout, stderr, exitCode };
       },
-      catch: (e) => new ShellError({ message: `Shell command failed: ${e}`, command }),
-    }),
-})
+      catch: (e) => new ShellError({ message: `Shell command failed: ${e}`, command })
+    })
+});

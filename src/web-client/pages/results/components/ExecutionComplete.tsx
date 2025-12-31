@@ -1,14 +1,14 @@
-import { Alert, Text } from '@mantine/core'
-import { IconCheck } from '@tabler/icons-react'
+import { Alert, Text } from "@mantine/core";
+import { IconCheck } from "@tabler/icons-react";
 
 type ExecutionResult = {
-  success: boolean
-  output: string
-  summary?: unknown
-}
+  success: boolean;
+  output: string;
+  summary?: unknown;
+};
 
 interface ExecutionCompleteProps {
-  result: ExecutionResult
+  result: ExecutionResult;
 }
 
 export function ExecutionComplete({ result }: ExecutionCompleteProps) {
@@ -16,5 +16,5 @@ export function ExecutionComplete({ result }: ExecutionCompleteProps) {
     <Alert icon={<IconCheck size={16} />} title="Execution Complete" color="green">
       <Text>Plan executed successfully! Check the disk stats above for verification.</Text>
     </Alert>
-  )
+  );
 }

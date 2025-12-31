@@ -1,1 +1,1 @@
-export * from "./FileStatService"
+export * from "./FileStatService";

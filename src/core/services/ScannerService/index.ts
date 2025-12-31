@@ -4,6 +4,6 @@ export {
   ScanPathNotFound,
   ScanPermissionDenied,
   ScanFailed,
-  FileStatFailed,
-} from "./ScannerService"
-export type { ScannerService, ScannerError } from "./ScannerService"
+  FileStatFailed
+} from "./ScannerService";
+export type { ScannerService, ScannerError } from "./ScannerService";

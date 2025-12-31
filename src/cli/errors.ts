@@ -1,19 +1,19 @@
-import { Match } from "effect"
+import { Match } from "effect";
 
 import type {
   DiskNotFound,
   DiskNotADirectory,
   DiskNotAMountPoint,
   DiskPermissionDenied,
-  DiskStatsFailed,
-} from "@services/DiskService"
+  DiskStatsFailed
+} from "@services/DiskService";
 
 import type {
   ScanPathNotFound,
   ScanPermissionDenied,
   ScanFailed,
-  FileStatFailed,
-} from "@services/ScannerService"
+  FileStatFailed
+} from "@services/ScannerService";
 
 import type {
   TransferSourceNotFound,
@@ -21,21 +21,17 @@ import type {
   TransferDestinationPermissionDenied,
   TransferDiskFull,
   TransferBackendUnavailable,
-  TransferFailed,
-} from "@services/TransferService"
+  TransferFailed
+} from "@services/TransferService";
 
 type DiskError =
   | DiskNotFound
   | DiskNotADirectory
   | DiskNotAMountPoint
   | DiskPermissionDenied
-  | DiskStatsFailed
+  | DiskStatsFailed;
 
-type ScannerError =
-  | ScanPathNotFound
-  | ScanPermissionDenied
-  | ScanFailed
-  | FileStatFailed
+type ScannerError = ScanPathNotFound | ScanPermissionDenied | ScanFailed | FileStatFailed;
 
 type TransferError =
   | TransferSourceNotFound
@@ -43,19 +39,19 @@ type TransferError =
   | TransferDestinationPermissionDenied
   | TransferDiskFull
   | TransferBackendUnavailable
-  | TransferFailed
+  | TransferFailed;
 
-type DomainError = DiskError | ScannerError | TransferError
+type DomainError = DiskError | ScannerError | TransferError;
 
 export class AppError extends Error {
-  readonly _tag = "AppError"
+  readonly _tag = "AppError";
 
   constructor(
     readonly title: string,
     readonly detail: string,
     readonly suggestion: string
   ) {
-    super(`${title}: ${detail}`)
+    super(`${title}: ${detail}`);
   }
 
   format(): string {
@@ -64,8 +60,8 @@ export class AppError extends Error {
       ``,
       `   ${this.detail}`,
       ``,
-      `   Hint: ${this.suggestion}`,
-    ].join("\n")
+      `   Hint: ${this.suggestion}`
+    ].join("\n");
   }
 }
 
@@ -192,19 +188,15 @@ const errors = {
     ),
 
   unexpected: (message: string) =>
-    new AppError(
-      "Unexpected error",
-      message,
-      `If this persists, please report this issue.`
-    ),
+    new AppError("Unexpected error", message, `If this persists, please report this issue.`),
 
   permissionDenied: (message: string) =>
     new AppError(
       "Permission denied",
       message,
       `Check that you have the required permissions. You may need to run with elevated privileges.`
-    ),
-}
+    )
+};
 
 const matchDomainError = Match.typeTags<DomainError>()({
   DiskNotFound: (e) => errors.diskNotFound(e.path),
@@ -223,41 +215,40 @@ const matchDomainError = Match.typeTags<DomainError>()({
   TransferDestinationPermissionDenied: (e) => errors.destinationPermissionDenied(e.path),
   TransferDiskFull: (e) => errors.diskFull(e.path),
   TransferBackendUnavailable: (e) => errors.backendUnavailable(e.reason),
-  TransferFailed: (e) => errors.transferFailed(e.source, e.destination, e.reason),
-})
+  TransferFailed: (e) => errors.transferFailed(e.source, e.destination, e.reason)
+});
 
 const isDomainError = (e: unknown): e is DomainError =>
   typeof e === "object" &&
   e !== null &&
   "_tag" in e &&
-  typeof (e as { _tag: unknown })._tag === "string"
+  typeof (e as { _tag: unknown })._tag === "string";
 
 const isPermissionError = (message: string): boolean =>
   message.toLowerCase().includes("permission denied") ||
   message.toLowerCase().includes("eacces") ||
   message.toLowerCase().includes("operation not permitted") ||
-  message.toLowerCase().includes("eperm")
+  message.toLowerCase().includes("eperm");
 
 export const fromDomainError = (error: unknown): AppError => {
   if (error instanceof AppError) {
-    return error
+    return error;
   }
 
   if (isDomainError(error)) {
     try {
-      return matchDomainError(error)
-    } catch {
-    }
+      return matchDomainError(error);
+    } catch {}
   }
 
   if (error instanceof Error) {
     return isPermissionError(error.message)
       ? errors.permissionDenied(error.message)
-      : errors.unexpected(error.message)
+      : errors.unexpected(error.message);
   }
 
-  return errors.unexpected(String(error))
-}
+  return errors.unexpected(String(error));
+};
 
 export const {
   diskNotFound,
@@ -278,5 +269,5 @@ export const {
   destinationPermissionDenied,
   diskFull,
   unexpected,
-  permissionDenied,
-} = errors
+  permissionDenied
+} = errors;

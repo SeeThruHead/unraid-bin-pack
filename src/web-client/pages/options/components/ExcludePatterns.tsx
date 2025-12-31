@@ -1,20 +1,15 @@
-import { Stack, Checkbox, TextInput } from '@mantine/core'
+import { Stack, Checkbox, TextInput } from "@mantine/core";
+import { useExclude, useExcludeCustom } from "../../../store/planStore";
 
-const DEFAULT_EXCLUDE_PATTERNS = ['.DS_Store', '@eaDir', '.Trashes', '.Spotlight-V100'] as const
+const DEFAULT_EXCLUDE_PATTERNS = [".DS_Store", "@eaDir", ".Trashes", ".Spotlight-V100"] as const;
 
 const togglePattern = (patterns: string[], pattern: string, checked: boolean): string[] =>
-  checked
-    ? [...patterns, pattern]
-    : patterns.filter((p) => p !== pattern)
+  checked ? [...patterns, pattern] : patterns.filter((p) => p !== pattern);
 
-interface ExcludePatternsProps {
-  exclude: string[]
-  excludeCustom: string
-  onChangeExclude: (patterns: string[]) => void
-  onChangeExcludeCustom: (value: string) => void
-}
+export function ExcludePatterns() {
+  const [exclude, setExclude] = useExclude();
+  const [excludeCustom, setExcludeCustom] = useExcludeCustom();
 
-export function ExcludePatterns({ exclude, excludeCustom, onChangeExclude, onChangeExcludeCustom }: ExcludePatternsProps) {
   return (
     <Stack gap="md">
       {DEFAULT_EXCLUDE_PATTERNS.map((pattern) => (
@@ -22,9 +17,7 @@ export function ExcludePatterns({ exclude, excludeCustom, onChangeExclude, onCha
           key={pattern}
           label={pattern}
           checked={exclude.includes(pattern)}
-          onChange={(e) =>
-            onChangeExclude(togglePattern(exclude, pattern, e.currentTarget.checked))
-          }
+          onChange={(e) => setExclude(togglePattern(exclude, pattern, e.currentTarget.checked))}
         />
       ))}
       <TextInput
@@ -32,8 +25,8 @@ export function ExcludePatterns({ exclude, excludeCustom, onChangeExclude, onCha
         description="Comma-separated patterns"
         placeholder="*.tmp,*.cache"
         value={excludeCustom}
-        onChange={(e) => onChangeExcludeCustom(e.currentTarget.value)}
+        onChange={(e) => setExcludeCustom(e.currentTarget.value)}
       />
     </Stack>
-  )
+  );
 }

@@ -44,10 +44,12 @@ Core types and business logic:
 Infrastructure and algorithms:
 
 #### Core Algorithm
+
 - **[SimpleConsolidator](./src/services/BinPack/SimpleConsolidator.md)** - Main consolidation algorithm
 - **[MoveGenerator](./src/services/BinPack/MoveGenerator.md)** - Bin-packing implementation
 
 #### Data Collection
+
 - **[ScannerService](./src/services/ScannerService/ScannerService.md)** - Scans disks and creates WorldView
 - **[DiskService](./src/services/DiskService/DiskService.md)** - Disk metadata operations
 - **[DiskStatsService](./src/services/DiskStatsService/DiskStatsService.md)** - Disk space statistics
@@ -55,11 +57,13 @@ Infrastructure and algorithms:
 - **[GlobService](./src/services/GlobService/GlobService.md)** - File discovery
 
 #### Execution
+
 - **[PlanGenerator](./src/services/PlanGenerator/PlanGenerator.md)** - Generates consolidation plans
 - **[PlanScriptGenerator](./src/services/PlanScriptGenerator/PlanScriptGenerator.md)** - Exports plans as bash scripts
 - **[TransferService](./src/services/TransferService/TransferService.md)** - Executes file transfers
 
 #### Infrastructure
+
 - **[LoggerService](./src/services/LoggerService/LoggerService.md)** - Structured logging
 - **[ShellService](./src/services/ShellService/ShellService.md)** - Shell command execution
 - **[TerminalUIService](./src/services/TerminalUIService/TerminalUIService.md)** - Interactive prompts
@@ -85,6 +89,7 @@ Command-line interface:
 ## Effect.js
 
 This project uses [Effect](https://effect.website/) for:
+
 - Type-safe error handling
 - Dependency injection via services
 - Composable operations

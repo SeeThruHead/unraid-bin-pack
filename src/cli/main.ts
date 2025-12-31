@@ -1,9 +1,9 @@
-import { Command } from "@effect/cli"
-import { BunContext, BunRuntime } from "@effect/platform-bun"
-import { Effect, Option, Logger, LogLevel } from "effect"
+import { Command } from "@effect/cli";
+import { BunContext, BunRuntime } from "@effect/platform-bun";
+import { Effect, Option, Logger, LogLevel } from "effect";
 
-import * as Opts from "@cli/options"
-import { runPlan, runApply, runShow, withErrorHandling, AppLive } from "@cli/handler"
+import * as Opts from "@cli/options";
+import { runPlan, runApply, runShow, withErrorHandling, AppLive } from "@cli/handler";
 
 const planCommand = Command.make(
   "plan",
@@ -19,7 +19,7 @@ const planCommand = Command.make(
     moveAsFolderThreshold: Opts.moveAsFolderThreshold,
     planFile: Opts.planFile,
     force: Opts.force,
-    debug: Opts.debug,
+    debug: Opts.debug
   },
   (opts) => {
     const allOptionsEmpty =
@@ -34,103 +34,94 @@ const planCommand = Command.make(
       Option.isNone(opts.moveAsFolderThreshold) &&
       Option.isNone(opts.planFile) &&
       !opts.force &&
-      !opts.debug
+      !opts.debug;
 
-    const isInteractive = allOptionsEmpty && process.stdin.isTTY
+    const isInteractive = allOptionsEmpty && process.stdin.isTTY;
 
     return withErrorHandling(
-      runPlan({
-        src: Option.getOrUndefined(opts.src),
-        dest: Option.getOrUndefined(opts.dest),
-        minSpace: Option.getOrUndefined(opts.minSpace),
-        minFileSize: Option.getOrUndefined(opts.minFileSize),
-        pathFilter: Option.getOrUndefined(opts.pathFilter),
-        include: Option.getOrUndefined(opts.include),
-        exclude: Option.getOrUndefined(opts.exclude),
-        minSplitSize: Option.getOrUndefined(opts.minSplitSize),
-        moveAsFolderThreshold: Option.getOrUndefined(opts.moveAsFolderThreshold),
-        planFile: Option.getOrUndefined(opts.planFile),
-        force: opts.force,
-        debug: opts.debug,
-      }, isInteractive)
+      runPlan(
+        {
+          src: Option.getOrUndefined(opts.src),
+          dest: Option.getOrUndefined(opts.dest),
+          minSpace: Option.getOrUndefined(opts.minSpace),
+          minFileSize: Option.getOrUndefined(opts.minFileSize),
+          pathFilter: Option.getOrUndefined(opts.pathFilter),
+          include: Option.getOrUndefined(opts.include),
+          exclude: Option.getOrUndefined(opts.exclude),
+          minSplitSize: Option.getOrUndefined(opts.minSplitSize),
+          moveAsFolderThreshold: Option.getOrUndefined(opts.moveAsFolderThreshold),
+          planFile: Option.getOrUndefined(opts.planFile),
+          force: opts.force,
+          debug: opts.debug
+        },
+        isInteractive
+      )
     ).pipe(
-      opts.debug ? Effect.provide(Logger.minimumLogLevel(LogLevel.Debug)) : (x => x),
+      opts.debug ? Effect.provide(Logger.minimumLogLevel(LogLevel.Debug)) : (x) => x,
       Effect.provide(AppLive)
-    )
+    );
   }
-).pipe(
-  Command.withDescription(
-    "Scan source disk and compute optimal move plan"
-  )
-)
+).pipe(Command.withDescription("Scan source disk and compute optimal move plan"));
 
 const applyCommand = Command.make(
   "apply",
   {
     planFile: Opts.planFile,
     concurrency: Opts.concurrency,
-    dryRun: Opts.dryRun,
+    dryRun: Opts.dryRun
   },
   (opts) =>
     withErrorHandling(
       runApply({
         planFile: Option.getOrUndefined(opts.planFile),
         concurrency: opts.concurrency,
-        dryRun: opts.dryRun,
+        dryRun: opts.dryRun
       })
     ).pipe(Effect.provide(AppLive))
-).pipe(
-  Command.withDescription("Execute the saved move plan")
-)
+).pipe(Command.withDescription("Execute the saved move plan"));
 
 const showCommand = Command.make(
   "show",
   {
-    planFile: Opts.planFile,
+    planFile: Opts.planFile
   },
   (opts) =>
     withErrorHandling(
       runShow({
-        planFile: Option.getOrUndefined(opts.planFile),
+        planFile: Option.getOrUndefined(opts.planFile)
       })
     ).pipe(Effect.provide(AppLive))
-).pipe(
-  Command.withDescription("Display the saved move plan")
-)
+).pipe(Command.withDescription("Display the saved move plan"));
 
 const webCommand = Command.make(
   "web",
   {
-    port: Opts.port,
+    port: Opts.port
   },
   (opts) =>
     Effect.gen(function* () {
-      const webModule = yield* Effect.promise(() => import("../web-server/main"))
+      const webModule = yield* Effect.promise(() => import("../web-server/main"));
 
-      const server = Bun.serve({
+      Bun.serve({
         ...webModule.default,
-        port: opts.port,
-      })
+        port: opts.port
+      });
 
-      console.log(`\n🌐 Web server started!`)
-      console.log(`📍 Access the UI at: http://localhost:${opts.port}\n`)
+      console.warn(`\n🌐 Web server started!`);
+      console.warn(`📍 Access the UI at: http://localhost:${opts.port}\n`);
 
-      return yield* Effect.never
+      return yield* Effect.never;
     }).pipe(Effect.provide(BunContext.layer))
-).pipe(
-  Command.withDescription("Start the web interface")
-)
+).pipe(Command.withDescription("Start the web interface"));
 
 const rootCommand = Command.make("unraid-bin-pack", {}).pipe(
   Command.withSubcommands([planCommand, applyCommand, showCommand, webCommand]),
-  Command.withDescription(
-    "Consolidate files across Unraid disks using bin-packing"
-  )
-)
+  Command.withDescription("Consolidate files across Unraid disks using bin-packing")
+);
 
 const cli = Command.run(rootCommand, {
   name: "unraid-bin-pack",
-  version: "0.1.0",
-})
+  version: "0.1.0"
+});
 
-cli(process.argv).pipe(Effect.provide(BunContext.layer), BunRuntime.runMain)
+cli(process.argv).pipe(Effect.provide(BunContext.layer), BunRuntime.runMain);

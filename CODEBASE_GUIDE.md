@@ -20,6 +20,7 @@ src/
 ## How It Works (High Level)
 
 ### The `plan` Command:
+
 1. User specifies source disk(s) and options via CLI
 2. **Scanner** reads all files from specified disk(s)
 3. **Disk** service gets current disk stats (free/used space)
@@ -28,30 +29,36 @@ src/
 6. Script is saved to `~/.unraid-bin-pack-plan.sh`
 
 ### The `apply` Command:
+
 1. Reads the saved plan script
 2. Shows summary and asks for confirmation
 3. Executes the bash script (runs rsync in parallel with --remove-source-files)
 4. Files are moved from source to destination disks
 
 ### The `status` Command:
+
 1. Reads saved plan
 2. Shows what would be moved
 
 ## Core Concepts
 
 ### Effect-TS
+
 The entire codebase uses Effect-TS for:
+
 - **Type-safe error handling**: Custom error types with `Data.TaggedError`
 - **Dependency injection**: `Context.Tag` and `Layer` for services
 - **Composable effects**: `Effect.gen`, `pipe`, `Effect.flatMap`
 - **Pure functional programming**: Immutable data structures
 
 ### Service Pattern
+
 Every service follows this pattern:
+
 ```typescript
 // 1. Define service interface
 interface MyService {
-  readonly doSomething: (input) => Effect.Effect<Output, Error>
+  readonly doSomething: (input) => Effect.Effect<Output, Error>;
 }
 
 // 2. Create Context.Tag
@@ -59,8 +66,11 @@ class MyServiceTag extends Context.Tag("MyService")<MyServiceTag, MyService>() {
 
 // 3. Implement as Layer
 const MyServiceLive = Layer.succeed(MyServiceTag, {
-  doSomething: (input) => Effect.sync(() => { /* implementation */ })
-})
+  doSomething: (input) =>
+    Effect.sync(() => {
+      /* implementation */
+    })
+});
 ```
 
 ---
@@ -72,9 +82,11 @@ const MyServiceLive = Layer.succeed(MyServiceTag, {
 **Purpose**: Represents a disk with space calculations.
 
 **Key Types**:
+
 - `Disk`: A disk with path, totalBytes, and freeBytes
 
 **Pure Functions**:
+
 - `usedBytes(disk)`: Calculates used space
 - `usagePercent(disk)`: Calculates percentage used (0-100)
 - `canFit(disk, bytes, threshold)`: Checks if bytes fit with minimum threshold remaining
@@ -88,9 +100,11 @@ const MyServiceLive = Layer.succeed(MyServiceTag, {
 **Purpose**: Represents a file in the system.
 
 **Key Types**:
+
 - `FileEntry`: File with absolutePath, relativePath, sizeBytes, and diskPath
 
 **Pure Functions**:
+
 - `destinationPath(file, destDiskPath)`: Computes where file will be moved to
 
 **Style**: Pure functional, single responsibility.
@@ -102,15 +116,18 @@ const MyServiceLive = Layer.succeed(MyServiceTag, {
 **Purpose**: Groups files by folder for bin-packing decisions.
 
 **Key Types**:
+
 - `FolderGroup`: A folder with its files, total size, and whether to keep together
 - `FolderGroupOptions`: Configuration for grouping behavior
 
 **Functions**:
+
 - `groupByImmediateFolder(files, options)`: Groups files by their immediate parent folder
 - `groupByTopLevelFolder(files)`: Groups files by top-level folder (always kept together)
 - `sortBySize(folders)`: Sorts folder groups largest-first
 
 **Grouping Logic**:
+
 1. Files in same folder are grouped together
 2. `keepTogether` is true if:
    - Total size < minSplitSizeBytes (default 1GB), OR
@@ -125,12 +142,14 @@ const MyServiceLive = Layer.succeed(MyServiceTag, {
 **Purpose**: Represents a plan for moving files between disks.
 
 **Key Types**:
+
 - `MoveStatus`: pending | in_progress | completed | skipped | failed
 - `FileMove`: A single file move operation with status and optional reason
 - `MovePlan`: Collection of moves with computed summary
 - `MoveSummary`: Aggregated statistics (total files/bytes, per-disk counts)
 
 **Pure Functions**:
+
 - `createFileMove(file, targetDiskPath)`: Creates a new pending move
 - `skipMove(move, reason)`: Marks a move as skipped with reason
 - `computeSummary(moves)`: Computes aggregated stats from pending moves
@@ -145,6 +164,7 @@ const MyServiceLive = Layer.succeed(MyServiceTag, {
 **Purpose**: Snapshot of the entire system state.
 
 **Key Types**:
+
 - `DiskState`: Current state of a disk (like Disk but read-only snapshot)
 - `WorldView`: Complete view of all disks and files in the system
 
@@ -159,9 +179,11 @@ const MyServiceLive = Layer.succeed(MyServiceTag, {
 **Purpose**: File filtering logic for bin-packing.
 
 **Key Types**:
+
 - `FileFilterCriteria`: Configuration for filtering (minSizeBytes, pathPrefixes)
 
 **Pure Functions**:
+
 - `filterFilesBySize(files, minSizeBytes)`: Filters files by minimum size
 - `filterFilesByPathPrefix(files, pathPrefixes)`: Filters by path patterns (handles /mnt/disk# paths)
 - `applyFileFilters(files, criteria)`: Applies all filters in sequence
@@ -175,9 +197,11 @@ const MyServiceLive = Layer.succeed(MyServiceTag, {
 **Purpose**: Disk ranking strategies for bin-packing algorithm.
 
 **Key Types**:
+
 - `DiskWithUsage`: Extends DiskState with computed usedBytes and usedPct
 
 **Pure Functions**:
+
 - `calculateDiskUsage(disk)`: Computes usage metrics from free/total bytes
 - `hasFilesOnDisk(disk, files)`: Checks if disk contains any files
 - `rankDisksByFullness(disks, files)`: Returns disks sorted by % full (least full first)
@@ -191,13 +215,16 @@ const MyServiceLive = Layer.succeed(MyServiceTag, {
 **Purpose**: Bucketing and sampling strategies for optimizing file combination generation.
 
 **Key Types**:
+
 - `BucketRange`: Size range definition (min, max)
 - `FileBucket`: Group of files in same size range with metadata
 
 **Constants**:
+
 - `DEFAULT_SIZE_BUCKETS`: [0-100KB, 100KB-1MB, 1-10MB, 10-100MB, 100MB+]
 
 **Pure Functions**:
+
 - `createFileBucket(files, range)`: Creates bucket for size range
 - `groupFilesIntoBuckets(files, bucketRanges?)`: Groups files by size buckets
 - `sampleRepresentativeFiles(bucket)`: Picks smallest, median, largest from bucket
@@ -214,9 +241,11 @@ const MyServiceLive = Layer.succeed(MyServiceTag, {
 **Purpose**: Scoring algorithms for ranking file move candidates.
 
 **Key Types**:
+
 - `ScoredCandidate`: File combination with target disk, total size, wasted space, and score
 
 **Pure Functions**:
+
 - `calculateUtilizationScore(totalBytes, availableBytes)`: Returns utilization ratio (higher is better)
 - `scoreCombination(files, availableBytes, targetDisk)`: Creates scored candidate
 - `findBestScored(candidates)`: Selects candidate with highest score
@@ -232,9 +261,11 @@ const MyServiceLive = Layer.succeed(MyServiceTag, {
 **Purpose**: Optimizes file move chains to eliminate redundant operations.
 
 **Key Functions**:
+
 - `optimizeMoveChains(moves)`: Main optimization function
 
 **Algorithm**: Eliminates intermediate moves in chains
+
 - Example: A→B, B→C becomes A→C (single move)
 - Also removes same-disk moves (source === target)
 - Filters out moves to destinations that will themselves be moved
@@ -250,16 +281,19 @@ const MyServiceLive = Layer.succeed(MyServiceTag, {
 **Purpose**: Projects disk states after moves are applied (before/after simulation).
 
 **Key Types**:
+
 - `DiskSnapshot`: Point-in-time disk state (path, totalBytes, freeBytes)
 - `DiskProjectionResult`: Initial state, final state, evacuated disk count
 
 **Pure Functions**:
+
 - `projectDiskStates(initialDisks, moves)`: Main projection function
 - `calculateDiskFreeChanges(moves)`: Computes per-disk space changes
 - `applyChangesToDisks(disks, changes)`: Applies changes to snapshots
 - `countEvacuatedDisks(initial, final)`: Counts fully emptied disks
 
 **Use Cases**:
+
 - Preview what disk states will look like after plan execution
 - Validate that moves won't cause disk full errors
 - Report statistics (e.g., "3 disks will be evacuated")
@@ -277,10 +311,12 @@ Services contain the business logic and side effects. They use Effect-TS for dep
 **Purpose**: Generates optimal file move candidates for bin-packing.
 
 **Key Functions**:
+
 - `findBestSingleFile(files, availableBytes, targetDisk)`: Finds best single file to move
 - `findBestCombinationForDisk(files, availableBytes, targetDisk, maxCombinationSize)`: Main entry point
 
 **Algorithm Pipeline**:
+
 1. Filter files that fit in available space
 2. Find best single file (baseline)
 3. Group files into size buckets
@@ -305,6 +341,7 @@ Services contain the business logic and side effects. They use Effect-TS for dep
 **After Refactoring**: ~220 lines focused purely on orchestration
 
 **Algorithm Overview**:
+
 1. **Filter files** using FileFilter module
 2. **Rank disks** using DiskRanking module
 3. **For each source disk** (from least to most full):
@@ -314,21 +351,25 @@ Services contain the business logic and side effects. They use Effect-TS for dep
    - Mark source disk as processed when done
 
 **Key Functions**:
+
 - `consolidateSimple(worldView, options)`: Main orchestration
 - `findBestMoveAcrossDestinations(...)`: Tries all destination disks, uses MoveGenerator
 
 **Type Aliases** (Clarity):
+
 - `AvailableSpaceMap = Map<string, number>`
 - `MovedFilesSet = Set<string>`
 - `ProcessedDisksSet = Set<string>`
 
 **Modules Used**:
+
 - `FileFilter`: Filters files by size and path
 - `DiskRanking`: Ranks disks by fullness
 - `MoveGenerator`: Finds best file combinations
 - `MovePlan`: Creates file move records
 
 **Improvements Made**:
+
 - ✓ Extracted filtering logic → FileFilter module
 - ✓ Extracted ranking logic → DiskRanking module
 - ✓ Extracted bucketing/sampling → FileOrderStrategy module
@@ -348,12 +389,14 @@ Services contain the business logic and side effects. They use Effect-TS for dep
 **Purpose**: Generates executable bash scripts from move plans.
 
 **Key Functions**:
+
 - `groupByTargetDisk(moves)`: Groups moves by destination disk for batching
 - `generateHeader(options)`: Creates script header with metadata
 - `generateBatchCommand(batch, index)`: Creates rsync command for one batch
 - `generate(options)`: Main entry point, returns bash script string
 
 **Output Format**:
+
 ```bash
 #!/bin/bash
 # Metadata header...
@@ -369,6 +412,7 @@ wait  # Wait for all parallel rsync jobs
 ```
 
 **Key Features**:
+
 - Runs rsync in parallel (background jobs with `&`)
 - Uses `--files-from` for efficient batching
 - Uses `--remove-source-files` to delete source after successful copy
@@ -381,21 +425,25 @@ wait  # Wait for all parallel rsync jobs
 ### Other Services (Summary)
 
 **src/services/DiskService.ts**:
+
 - Validates disk paths (exists, is directory, is mount point)
 - Gets disk stats via DiskStatsService
 - Reads file system info via FileSystem
 
 **src/services/ScannerService.ts**:
+
 - Scans directory trees for files
 - Collects file metadata (size, paths)
 - Returns array of FileEntry
 
 **src/services/TransferService.ts**:
+
 - Executes file transfers using rsync
 - Handles transfer errors
 - Supports parallel execution
 
 **src/services/LoggerService.ts**:
+
 - Formats output for CLI (tables, progress bars, summaries)
 - Uses ANSI colors for readability
 - Provides different output formats for plan/apply/status
@@ -409,9 +457,11 @@ wait  # Wait for all parallel rsync jobs
 **Purpose**: Generic combinatorics utilities for generating k-sized combinations.
 
 **Key Functions**:
+
 - `generateCombinations<T>(array, k)`: Generates all k-sized combinations from array
 
 **Algorithm**: Backtracking algorithm for combination generation
+
 - Base cases: k=0 returns [[]], k>length returns [], k=1 returns single-item arrays
 - Recursive case: Uses backtracking to build combinations
 
@@ -426,9 +476,11 @@ wait  # Wait for all parallel rsync jobs
 **Purpose**: Parse and format human-readable file sizes.
 
 **Constants**:
+
 - `UNITS`: Maps size units (b, kb, mb, gb, tb, kib, mib, gib, tib) to byte multipliers
 
 **Functions**:
+
 - `parseSize(input)`: Parses "50MB", "1.5GB", etc. to bytes
 - `formatSize(bytes)`: Formats bytes to human-readable string with appropriate unit
 
@@ -443,12 +495,14 @@ wait  # Wait for all parallel rsync jobs
 Infrastructure services wrap external dependencies (filesystem, shell, etc.) to make them testable and mockable.
 
 **Common Pattern**:
+
 - Define typed errors (e.g., `FileNotFound`, `PermissionDenied`)
 - Service interface with readonly methods returning `Effect.Effect<T, Error>`
 - Live implementation using platform APIs
 - Error conversion from platform errors to typed errors
 
 **Services**:
+
 - `GlobService`: File pattern matching (wraps Bun.Glob)
 - `FileStatService`: File metadata (wraps @effect/platform FileSystem.stat)
 - `DiskStatsService`: Disk space info (wraps check-disk-space)
@@ -468,6 +522,7 @@ Infrastructure services wrap external dependencies (filesystem, shell, etc.) to 
 **After Refactoring**: 332 lines focused on orchestration (35% reduction)
 
 **Key Functions**:
+
 - `buildWorldViewAndPlan()`: Orchestrates scanning, planning, and disk projection
 - `runPlan()`: Plan command handler
 - `runApply()`: Apply command handler
@@ -476,11 +531,13 @@ Infrastructure services wrap external dependencies (filesystem, shell, etc.) to 
 - `createAppLayer()`: Effect-TS layer composition
 
 **Modules Used**:
+
 - `MoveOptimization`: Optimizes move chains (eliminates A→B→C redundancy)
 - `DiskProjection`: Projects before/after disk states
 - `optionParsing`: Parses and validates CLI options
 
 **Improvements Made**:
+
 - ✓ Extracted move chain optimization → MoveOptimization module (domain)
 - ✓ Extracted disk projection → DiskProjection module (domain)
 - ✓ Extracted option parsing → optionParsing helper (cli)
@@ -504,6 +561,7 @@ Infrastructure services wrap external dependencies (filesystem, shell, etc.) to 
 ## Key Insights
 
 ### What's Working Well
+
 1. **Clear Domain Layer**: Pure functions, immutable data, excellent type definitions
 2. **Effect-TS Usage**: Consistent dependency injection and error handling patterns
 3. **Separation of Concerns**: Clean boundaries between domain/services/infra/CLI
@@ -512,6 +570,7 @@ Infrastructure services wrap external dependencies (filesystem, shell, etc.) to 
 ### Major Refactoring Completed ✓
 
 **1. SimpleConsolidator.ts Modularization** - Reduced cognitive complexity by 50%:
+
 - **src/lib/combinatorics.ts** (New) - Generic combination generation
 - **src/domain/FileFilter.ts** (New) - File filtering strategies
 - **src/domain/DiskRanking.ts** (New) - Disk ranking logic
@@ -521,6 +580,7 @@ Infrastructure services wrap external dependencies (filesystem, shell, etc.) to 
 - **src/services/SimpleConsolidator.ts** (Refactored) - Pure orchestration (400 → 220 lines)
 
 **Benefits**:
+
 - ✓ Each module < 100 lines and focused on single concern
 - ✓ Pure functions extracted to domain layer (easily testable)
 - ✓ Clear separation: filtering → ranking → sampling → scoring → selection
@@ -528,6 +588,7 @@ Infrastructure services wrap external dependencies (filesystem, shell, etc.) to 
 - ✓ Main algorithm now reads like a clear high-level pipeline
 
 **2. handler.ts Modularization** - Reduced complexity by 35%:
+
 - **src/domain/MoveOptimization.ts** (New) - Move chain optimization algorithm
 - **src/domain/DiskProjection.ts** (New) - Before/after disk state projection
 - **src/cli/optionParsing.ts** (New) - CLI option parsing helpers
@@ -535,18 +596,21 @@ Infrastructure services wrap external dependencies (filesystem, shell, etc.) to 
 - Removed 100 lines of dead code
 
 **Benefits**:
+
 - ✓ Pure algorithms extracted to domain (move optimization, disk projection)
 - ✓ Option parsing centralized and reusable
 - ✓ Command handlers are now focused on orchestration
 - ✓ Easier to test individual concerns
 
 **Overall Impact**:
+
 - ✓ All 101 tests still passing
 - ✓ 10 new focused modules created
 - ✓ 367 lines of complex code simplified or removed
 - ✓ Domain layer significantly enriched with reusable pure functions
 
 ### Future Opportunities
+
 1. **Script Generation**: Could separate concerns further
    - Consider splitting batching logic from script template generation
    - Extract script template to separate module
@@ -556,6 +620,7 @@ Infrastructure services wrap external dependencies (filesystem, shell, etc.) to 
    - Could explore using Effect.State for stateful algorithms
 
 ### Self-Documenting Code Checklist
+
 - ✓ Type definitions are clear and self-explanatory
 - ✓ Function names describe what they do
 - ✓ Pure functions are used where possible
@@ -576,11 +641,13 @@ This codebase started well-written and has been **significantly improved** throu
 **Refactoring 1: SimpleConsolidator.ts (Services Layer)**
 
 **Before**: ~400 lines mixing multiple concerns
+
 - File filtering, disk ranking, bucketing, sampling, combination generation, scoring all intertwined
 - Difficult to understand the high-level algorithm flow
 - Hard to test individual strategies in isolation
 
 **After**: 7 focused modules, each < 100 lines
+
 1. **src/lib/combinatorics.ts** - Reusable combination generation
 2. **src/domain/FileFilter.ts** - File filtering strategies (pure)
 3. **src/domain/DiskRanking.ts** - Disk ranking logic (pure)
@@ -592,11 +659,13 @@ This codebase started well-written and has been **significantly improved** throu
 **Refactoring 2: handler.ts (CLI Layer)**
 
 **Before**: 514 lines with mixed concerns and dead code
+
 - Move chain optimization, disk projection, option parsing mixed with command handlers
 - 100 lines of unused dead code (`displayPlanDetails`)
 - Repetitive option parsing logic
 
 **After**: 4 focused modules
+
 1. **src/domain/MoveOptimization.ts** - Move chain optimization (pure)
 2. **src/domain/DiskProjection.ts** - Disk state projection (pure)
 3. **src/cli/optionParsing.ts** - CLI option parsing helpers
@@ -605,6 +674,7 @@ This codebase started well-written and has been **significantly improved** throu
 ### Why This Matters
 
 **Reduced Cognitive Load**: Each module can be understood independently. A developer can:
+
 - Understand file filtering without thinking about scoring
 - Change move optimization without touching command handlers
 - Understand disk projection without knowing the CLI layer
@@ -612,6 +682,7 @@ This codebase started well-written and has been **significantly improved** throu
 - See high-level algorithm flow clearly in orchestration files
 
 **Improved Maintainability**:
+
 - Want a different ranking strategy? Change DiskRanking module
 - Want better move chain optimization? Change MoveOptimization module
 - Want different disk projection logic? Change DiskProjection module
@@ -647,6 +718,7 @@ This codebase started well-written and has been **significantly improved** throu
 The codebase now follows functional programming principles more consistently, with both the complex bin-packing algorithm and CLI handlers broken into digestible, composable pieces.
 
 **Quantified Improvements**:
+
 - 10 new focused modules created
 - 914 → 547 lines in refactored files (40% reduction)
 - 100 lines of dead code removed
@@ -655,9 +727,10 @@ The codebase now follows functional programming principles more consistently, wi
 - All 101 tests continue to pass
 
 **Files Refactored**:
+
 1. SimpleConsolidator.ts: 400 → 220 lines (45% reduction)
 2. handler.ts: 514 → 332 lines (35% reduction)
 
 ---
 
-*This guide represents a comprehensive review and major refactoring of the codebase. Created: 2025-12-29. Updated: 2025-12-29 (two major refactorings completed)*
+_This guide represents a comprehensive review and major refactoring of the codebase. Created: 2025-12-29. Updated: 2025-12-29 (two major refactorings completed)_

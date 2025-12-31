@@ -1,31 +1,35 @@
-import { Context, Data, Effect, Layer, pipe } from "effect"
-import { ShellServiceTag } from "../ShellService"
-import type { FileMove, MovePlan } from "@domain/MovePlan"
+import { Context, Data, Effect, Layer, pipe } from "effect";
+import { ShellServiceTag } from "../ShellService";
+import type { FileMove, MovePlan } from "@domain/MovePlan";
 
 export class TransferSourceNotFound extends Data.TaggedError("TransferSourceNotFound")<{
-  readonly path: string
+  readonly path: string;
 }> {}
 
-export class TransferSourcePermissionDenied extends Data.TaggedError("TransferSourcePermissionDenied")<{
-  readonly path: string
+export class TransferSourcePermissionDenied extends Data.TaggedError(
+  "TransferSourcePermissionDenied"
+)<{
+  readonly path: string;
 }> {}
 
-export class TransferDestinationPermissionDenied extends Data.TaggedError("TransferDestinationPermissionDenied")<{
-  readonly path: string
+export class TransferDestinationPermissionDenied extends Data.TaggedError(
+  "TransferDestinationPermissionDenied"
+)<{
+  readonly path: string;
 }> {}
 
 export class TransferDiskFull extends Data.TaggedError("TransferDiskFull")<{
-  readonly path: string
+  readonly path: string;
 }> {}
 
 export class TransferBackendUnavailable extends Data.TaggedError("TransferBackendUnavailable")<{
-  readonly reason: string
+  readonly reason: string;
 }> {}
 
 export class TransferFailed extends Data.TaggedError("TransferFailed")<{
-  readonly source: string
-  readonly destination: string
-  readonly reason: string
+  readonly source: string;
+  readonly destination: string;
+  readonly reason: string;
 }> {}
 
 export type TransferError =
@@ -34,34 +38,34 @@ export type TransferError =
   | TransferDestinationPermissionDenied
   | TransferDiskFull
   | TransferBackendUnavailable
-  | TransferFailed
+  | TransferFailed;
 
 export interface TransferResult {
-  readonly move: FileMove
-  readonly success: boolean
-  readonly error?: string
+  readonly move: FileMove;
+  readonly success: boolean;
+  readonly error?: string;
 }
 
 export interface TransferReport {
-  readonly results: readonly TransferResult[]
-  readonly successful: number
-  readonly failed: number
-  readonly skipped: number
+  readonly results: readonly TransferResult[];
+  readonly successful: number;
+  readonly failed: number;
+  readonly skipped: number;
 }
 
 export interface TransferOptions {
-  readonly dryRun: boolean
-  readonly concurrency: number
-  readonly preserveAttrs: boolean
-  readonly deleteSource: boolean
-  readonly onProgress?: (completed: number, total: number, current: FileMove) => void
+  readonly dryRun: boolean;
+  readonly concurrency: number;
+  readonly preserveAttrs: boolean;
+  readonly deleteSource: boolean;
+  readonly onProgress?: (completed: number, total: number, current: FileMove) => void;
 }
 
 export interface TransferService {
   readonly executeAll: (
     plan: MovePlan,
     options: TransferOptions
-  ) => Effect.Effect<TransferReport, TransferError>
+  ) => Effect.Effect<TransferReport, TransferError>;
 }
 
 export class TransferServiceTag extends Context.Tag("TransferService")<
@@ -70,10 +74,10 @@ export class TransferServiceTag extends Context.Tag("TransferService")<
 >() {}
 
 interface DiskBatch {
-  readonly sourceDisk: string
-  readonly targetDisk: string
-  readonly moves: readonly FileMove[]
-  readonly relativePaths: readonly string[]
+  readonly sourceDisk: string;
+  readonly targetDisk: string;
+  readonly moves: readonly FileMove[];
+  readonly relativePaths: readonly string[];
 }
 
 const buildBatchedRsyncCommand = (
@@ -85,118 +89,113 @@ const buildBatchedRsyncCommand = (
   const flags = [
     "-a",
     ...(options.deleteSource && !options.dryRun ? ["--remove-source-files"] : []),
-    ...(options.dryRun ? ["--dry-run", "-v"] : []),
-  ]
+    ...(options.dryRun ? ["--dry-run", "-v"] : [])
+  ];
 
-  const src = sourceDisk.endsWith("/") ? sourceDisk : `${sourceDisk}/`
-  const dst = targetDisk.endsWith("/") ? targetDisk : `${targetDisk}/`
+  const src = sourceDisk.endsWith("/") ? sourceDisk : `${sourceDisk}/`;
+  const dst = targetDisk.endsWith("/") ? targetDisk : `${targetDisk}/`;
 
-  return `rsync ${flags.join(" ")} --files-from="${filesFromPath}" "${src}" "${dst}"`
-}
+  return `rsync ${flags.join(" ")} --files-from="${filesFromPath}" "${src}" "${dst}"`;
+};
 
 const groupMovesByTargetDisk = (moves: readonly FileMove[]): DiskBatch[] => {
   const batches = moves.reduce((acc, move) => {
-    const target = move.targetDiskPath
-    const existing = acc.get(target)
+    const target = move.targetDiskPath;
+    const existing = acc.get(target);
     if (existing) {
-      acc.set(target, { moves: [...existing.moves, move], sourceDisk: existing.sourceDisk })
+      acc.set(target, { moves: [...existing.moves, move], sourceDisk: existing.sourceDisk });
     } else {
-      acc.set(target, { moves: [move], sourceDisk: move.file.diskPath })
+      acc.set(target, { moves: [move], sourceDisk: move.file.diskPath });
     }
-    return acc
-  }, new Map<string, { moves: FileMove[]; sourceDisk: string }>())
+    return acc;
+  }, new Map<string, { moves: FileMove[]; sourceDisk: string }>());
 
   return Array.from(batches.entries()).map(([targetDisk, { moves: batchMoves, sourceDisk }]) => ({
     sourceDisk,
     targetDisk,
     moves: batchMoves,
-    relativePaths: batchMoves.map((m) => m.file.relativePath),
-  }))
-}
+    relativePaths: batchMoves.map((m) => m.file.relativePath)
+  }));
+};
 
 export const RsyncTransferService = Layer.effect(
   TransferServiceTag,
   Effect.gen(function* () {
-    const shell = yield* ShellServiceTag
+    const shell = yield* ShellServiceTag;
 
     const executeBatch = (
       batch: DiskBatch,
       options: TransferOptions
     ): Effect.Effect<TransferResult[], never> => {
-      const tempFile = `/tmp/rsync-files-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`
-      const filesContent = batch.relativePaths.join("\n")
+      const tempFile = `/tmp/rsync-files-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`;
+      const filesContent = batch.relativePaths.join("\n");
 
       return pipe(
         shell.exec(`cat > "${tempFile}" << 'EOF'\n${filesContent}\nEOF`),
         Effect.flatMap(() => {
-          const command = buildBatchedRsyncCommand(
-            batch.sourceDisk,
-            batch.targetDisk,
-            tempFile,
-            {
-              preserveAttrs: options.preserveAttrs,
-              deleteSource: options.deleteSource,
-              dryRun: options.dryRun,
-            }
-          )
+          const command = buildBatchedRsyncCommand(batch.sourceDisk, batch.targetDisk, tempFile, {
+            preserveAttrs: options.preserveAttrs,
+            deleteSource: options.deleteSource,
+            dryRun: options.dryRun
+          });
 
-          return shell.exec(command)
+          return shell.exec(command);
         }),
         Effect.flatMap((result) => {
           return pipe(
             shell.exec(`rm -f "${tempFile}"`),
             Effect.map(() => result)
-          )
+          );
         }),
         Effect.map((result): TransferResult[] => {
           if (result.exitCode !== 0) {
             return batch.moves.map((move) => ({
               move,
               success: false,
-              error: `rsync batch failed (exit ${result.exitCode}): ${result.stderr}`,
-            }))
+              error: `rsync batch failed (exit ${result.exitCode}): ${result.stderr}`
+            }));
           }
 
           return batch.moves.map((move) => ({
             move,
-            success: true,
-          }))
+            success: true
+          }));
         }),
         Effect.catchAll((e) =>
           Effect.succeed(
             batch.moves.map((move) => ({
               move,
               success: false,
-              error: e.message,
+              error: e.message
             }))
           )
         )
-      )
-    }
+      );
+    };
 
     const executeAll: TransferService["executeAll"] = (plan, options) => {
-      const pendingMoves = plan.moves.filter((m) => m.status === "pending")
-      const skippedMoves = plan.moves.filter((m) => m.status === "skipped")
+      const pendingMoves = plan.moves.filter((m) => m.status === "pending");
+      const skippedMoves = plan.moves.filter((m) => m.status === "skipped");
 
       if (options.dryRun) {
         const results: TransferResult[] = [
           ...pendingMoves.map((move) => ({
             move,
-            success: true,
+            success: true
           })),
           ...skippedMoves.map((move) => ({
             move,
             success: false,
-            error: move.reason,
-          })),
-        ]
+            error: move.reason
+          }))
+        ];
 
         return Effect.succeed({
           results,
           successful: pendingMoves.length,
           failed: 0,
-          skipped: skippedMoves.length,
-        } as TransferReport)
+          skipped: skippedMoves.length
+        } as TransferReport);
       }
 
       if (pendingMoves.length === 0) {
@@ -204,52 +203,52 @@ export const RsyncTransferService = Layer.effect(
           results: skippedMoves.map((move) => ({
             move,
             success: false,
-            error: move.reason,
+            error: move.reason
           })),
           successful: 0,
           failed: 0,
-          skipped: skippedMoves.length,
-        } as TransferReport)
+          skipped: skippedMoves.length
+        } as TransferReport);
       }
 
-      const batches = groupMovesByTargetDisk(pendingMoves)
+      const batches = groupMovesByTargetDisk(pendingMoves);
 
       return pipe(
         Effect.forEach(batches, (batch) => executeBatch(batch, options), {
-          concurrency: options.concurrency,
+          concurrency: options.concurrency
         }),
         Effect.map((batchResults): TransferReport => {
-          const pendingResults = batchResults.flat()
+          const pendingResults = batchResults.flat();
 
           if (options.onProgress) {
-            const completed = pendingResults.length
-            const total = pendingMoves.length
-            const lastMove = pendingMoves[pendingMoves.length - 1]
+            const completed = pendingResults.length;
+            const total = pendingMoves.length;
+            const lastMove = pendingMoves[pendingMoves.length - 1];
             if (lastMove) {
-              options.onProgress(completed, total, lastMove)
+              options.onProgress(completed, total, lastMove);
             }
           }
 
           const skippedResults: TransferResult[] = skippedMoves.map((move) => ({
             move,
             success: false,
-            error: move.reason,
-          }))
+            error: move.reason
+          }));
 
-          const allResults = [...pendingResults, ...skippedResults]
-          const successful = pendingResults.filter((r) => r.success).length
-          const failed = pendingResults.filter((r) => !r.success).length
+          const allResults = [...pendingResults, ...skippedResults];
+          const successful = pendingResults.filter((r) => r.success).length;
+          const failed = pendingResults.filter((r) => !r.success).length;
 
           return {
             results: allResults,
             successful,
             failed,
-            skipped: skippedMoves.length,
-          }
+            skipped: skippedMoves.length
+          };
         })
-      )
-    }
+      );
+    };
 
-    return { executeAll }
+    return { executeAll };
   })
-)
+);

@@ -1,3 +1,5 @@
+import { Effect } from "effect";
+
 const UNITS: Record<string, number> = {
   b: 1,
   k: 1024,
@@ -11,45 +13,50 @@ const UNITS: Record<string, number> = {
   gib: 1024 * 1024 * 1024,
   t: 1024 * 1024 * 1024 * 1024,
   tb: 1024 * 1024 * 1024 * 1024,
-  tib: 1024 * 1024 * 1024 * 1024,
-}
+  tib: 1024 * 1024 * 1024 * 1024
+};
 
-export const parseSize = (input: string): number => {
-  const trimmed = input.trim().toLowerCase()
+export const parseSize = (input: string): Effect.Effect<number, Error> => {
+  const trimmed = input.trim().toLowerCase();
 
   if (/^\d+$/.test(trimmed)) {
-    return parseInt(trimmed, 10)
+    return Effect.succeed(parseInt(trimmed, 10));
   }
 
-  const match = trimmed.match(/^([\d.]+)\s*([a-z]+)$/)
+  const match = trimmed.match(/^([\d.]+)\s*([a-z]+)$/);
   if (!match) {
-    throw new Error(`Invalid size format: "${input}". Use formats like: 50MB, 1GB, 1.5TB`)
+    return Effect.fail(
+      new Error(`Invalid size format: "${input}". Use formats like: 50MB, 1GB, 1.5TB`)
+    );
   }
 
-  const numStr = match[1]
-  const unit = match[2]
+  const numStr = match[1];
+  const unit = match[2];
 
   if (!numStr || !unit) {
-    throw new Error(`Invalid size format: "${input}". Use formats like: 50MB, 1GB, 1.5TB`)
+    return Effect.fail(
+      new Error(`Invalid size format: "${input}". Use formats like: 50MB, 1GB, 1.5TB`)
+    );
   }
 
-  const num = parseFloat(numStr)
-  const multiplier = UNITS[unit]
+  const num = parseFloat(numStr);
+  const multiplier = UNITS[unit];
 
   if (multiplier === undefined) {
-    throw new Error(`Unknown size unit: "${unit}". Use: B, KB, MB, GB, TB`)
+    return Effect.fail(new Error(`Unknown size unit: "${unit}". Use: B, KB, MB, GB, TB`));
   }
 
-  return Math.floor(num * multiplier)
-}
+  return Effect.succeed(Math.floor(num * multiplier));
+};
 
 export const formatSize = (bytes: number): string => {
-  const absBytes = Math.abs(bytes)
-  const sign = bytes < 0 ? "-" : ""
+  const absBytes = Math.abs(bytes);
+  const sign = bytes < 0 ? "-" : "";
 
-  if (absBytes < 1024) return `${sign}${absBytes} B`
-  if (absBytes < 1024 * 1024) return `${sign}${(absBytes / 1024).toFixed(1)} KB`
-  if (absBytes < 1024 * 1024 * 1024) return `${sign}${(absBytes / 1024 / 1024).toFixed(1)} MB`
-  if (absBytes < 1024 * 1024 * 1024 * 1024) return `${sign}${(absBytes / 1024 / 1024 / 1024).toFixed(2)} GB`
-  return `${sign}${(absBytes / 1024 / 1024 / 1024 / 1024).toFixed(2)} TB`
-}
+  if (absBytes < 1024) return `${sign}${absBytes} B`;
+  if (absBytes < 1024 * 1024) return `${sign}${(absBytes / 1024).toFixed(1)} KB`;
+  if (absBytes < 1024 * 1024 * 1024) return `${sign}${(absBytes / 1024 / 1024).toFixed(1)} MB`;
+  if (absBytes < 1024 * 1024 * 1024 * 1024)
+    return `${sign}${(absBytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  return `${sign}${(absBytes / 1024 / 1024 / 1024 / 1024).toFixed(2)} TB`;
+};

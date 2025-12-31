@@ -1,84 +1,72 @@
-import { Stack, Text, Tree, LoadingOverlay, Group, Button, Checkbox } from '@mantine/core'
-import { useTree } from '@mantine/core'
-import { IconChevronDown } from '@tabler/icons-react'
-import type { RenderTreeNodePayload } from '@mantine/core'
-import type { PatternResponse } from '../../../types'
-import { consolidatePaths, expandPaths } from '../../../lib/pathConsolidation'
-
-const toTreeData = (patterns: PatternResponse[]) =>
-  patterns.map((p) => ({
-    value: p.pattern,
-    label: p.name,
-    children: p.children.map(child => ({
-      value: `${p.pattern}/${child}`,
-      label: child,
-    })),
-  }))
+import { Stack, Text, Group, Button, Card, Checkbox, TextInput, SimpleGrid } from "@mantine/core";
+import { IconFolder } from "@tabler/icons-react";
+import { useMemo, useCallback, memo, useState } from "react";
+import type { PatternResponse } from "../../../types";
+import { usePathFilters } from "../../../store/planStore";
 
 interface PathFilterTreeProps {
-  patterns: PatternResponse[]
-  selectedPaths: string[]
-  loading: boolean
-  onChange: (paths: string[]) => void
+  patterns: PatternResponse[];
+  loading: boolean;
 }
 
-const renderTreeNode = (
-  { node, expanded, hasChildren, elementProps, tree }: RenderTreeNodePayload,
-  onChange: (paths: string[]) => void,
-  patterns: PatternResponse[]
-) => {
-  const checked = tree.isNodeChecked(node.value)
-  const indeterminate = tree.isNodeIndeterminate(node.value)
+export const PathFilterTree = memo(function PathFilterTree({
+  patterns,
+  loading
+}: PathFilterTreeProps) {
+  const [selectedPaths, setSelectedPaths] = usePathFilters();
+  const [customFilter, setCustomFilter] = useState("");
 
-  return (
-    <Group gap="xs" {...elementProps}>
-      <Checkbox.Indicator
-        checked={checked}
-        indeterminate={indeterminate}
-        onClick={() => {
-          !checked ? tree.checkNode(node.value) : tree.uncheckNode(node.value)
-          setTimeout(() => onChange(consolidatePaths(tree.checkedState, patterns)), 0)
-        }}
-      />
+  // Get unique top-level folders only
+  const topLevelFolders = useMemo(() => {
+    const folders = new Set<string>();
+    for (const pattern of patterns) {
+      folders.add(pattern.pattern);
+    }
+    return Array.from(folders).sort();
+  }, [patterns]);
 
-      <Group gap={5} onClick={() => tree.toggleExpanded(node.value)}>
-        <span>{node.label}</span>
+  const selectedSet = useMemo(() => new Set(selectedPaths), [selectedPaths]);
 
-        {hasChildren && (
-          <IconChevronDown
-            size={14}
-            style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
-          />
-        )}
-      </Group>
-    </Group>
-  )
-}
+  const handleToggle = useCallback(
+    (folder: string) => {
+      const newSelected = new Set(selectedPaths);
+      if (newSelected.has(folder)) {
+        newSelected.delete(folder);
+      } else {
+        newSelected.add(folder);
+      }
+      setSelectedPaths(Array.from(newSelected));
+    },
+    [selectedPaths, setSelectedPaths]
+  );
 
-export function PathFilterTree({ patterns, selectedPaths, loading, onChange }: PathFilterTreeProps) {
-  const treeData = toTreeData(patterns)
-  const tree = useTree({
-    initialCheckedState: expandPaths(selectedPaths, patterns),
-    initialExpandedState: Object.fromEntries(patterns.map(p => [p.pattern, false])),
-  })
+  const handleCheckAll = useCallback(() => {
+    setSelectedPaths(topLevelFolders);
+  }, [topLevelFolders, setSelectedPaths]);
 
-  const handleCheckAll = () => {
-    tree.checkAllNodes()
-    setTimeout(() => onChange(consolidatePaths(tree.checkedState, patterns)), 0)
+  const handleCheckNone = useCallback(() => {
+    setSelectedPaths([]);
+  }, [setSelectedPaths]);
+
+  const handleAddCustom = useCallback(() => {
+    if (customFilter.trim()) {
+      const newSelected = new Set(selectedPaths);
+      newSelected.add(customFilter.trim());
+      setSelectedPaths(Array.from(newSelected));
+      setCustomFilter("");
+    }
+  }, [customFilter, selectedPaths, setSelectedPaths]);
+
+  if (loading) {
+    return <Text>Loading...</Text>;
   }
 
-  const handleCheckNone = () => {
-    tree.uncheckAllNodes()
-    setTimeout(() => onChange(consolidatePaths(tree.checkedState, patterns)), 0)
-  }
-
   return (
-    <Stack gap="md" pos="relative">
-      <LoadingOverlay visible={loading} />
+    <Stack gap="md">
       <Text size="sm" c="dimmed">
-        Select specific folder patterns to consolidate
+        Select top-level folders to consolidate
       </Text>
-      {treeData.length > 0 && (
+      {topLevelFolders.length > 0 && (
         <>
           <Group gap="xs" mb="md">
             <Button size="xs" variant="light" onClick={handleCheckAll}>
@@ -88,15 +76,47 @@ export function PathFilterTree({ patterns, selectedPaths, loading, onChange }: P
               Check None
             </Button>
           </Group>
-          <Tree
-            data={treeData}
-            tree={tree}
-            levelOffset={23}
-            expandOnClick={false}
-            renderNode={(payload) => renderTreeNode(payload, onChange, patterns)}
+
+          <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="sm">
+            {topLevelFolders.map((folder) => (
+              <Card
+                key={folder}
+                padding="sm"
+                withBorder
+                style={{ cursor: "pointer" }}
+                onClick={() => handleToggle(folder)}
+              >
+                <Group gap="sm" wrap="nowrap">
+                  <Checkbox
+                    checked={selectedSet.has(folder)}
+                    onChange={() => handleToggle(folder)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <IconFolder size={20} />
+                  <Text size="sm" style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {folder}
+                  </Text>
+                </Group>
+              </Card>
+            ))}
+          </SimpleGrid>
+
+          <TextInput
+            label="Custom Path Filter"
+            description="Add a custom path pattern (e.g., /mnt/user/CustomFolder)"
+            placeholder="/mnt/user/CustomFolder"
+            value={customFilter}
+            onChange={(e) => setCustomFilter(e.currentTarget.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAddCustom()}
+            rightSection={
+              <Button size="xs" onClick={handleAddCustom} disabled={!customFilter.trim()}>
+                Add
+              </Button>
+            }
+            rightSectionWidth={60}
           />
         </>
       )}
     </Stack>
-  )
-}
+  );
+});
