@@ -36,6 +36,7 @@ export default [
       "functional/no-let": "error",
       "functional/no-throw-statements": "error",
       "functional/prefer-tacit": "error",
+      "no-param-reassign": "error",
 
       // No comments rule
       "no-comments/disallowComments": "error",
