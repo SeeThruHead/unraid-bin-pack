@@ -3,7 +3,7 @@ import type { FileEntry } from "@domain/FileEntry";
 import type { FileMove } from "@domain/MovePlan";
 import { createFileMove } from "@domain/MovePlan";
 import type { WorldView } from "@domain/WorldView";
-import { applyMove } from "@domain/WorldView";
+import { moveFile } from "@domain/WorldView";
 import { rankDisksByFullness } from "@domain/DiskRanking";
 import { applyFileFilters } from "@domain/FileFilter";
 import { optimizeMoveChains } from "@domain/MoveOptimization";
@@ -287,7 +287,11 @@ export const packTightly = (
               )
             );
 
-            const updatedWorldView = applyMove(currentWorldViewState, move);
+            const updatedWorldView = moveFile(
+              move.file,
+              move.targetDiskPath,
+              move.destinationPath
+            )(currentWorldViewState);
             yield* Ref.set(currentWorldViewRef, updatedWorldView);
 
             const updatedSourceDisk = updatedWorldView.disks.find((d) => d.path === sourceDiskPath);

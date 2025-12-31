@@ -107,20 +107,27 @@ export interface ExecutionResult {
   readonly output: string;
 }
 
-const parseConfig = (config: PlanConfig) => {
-  return {
-    minSpaceBytes: config.minSpace ? parseSize(config.minSpace) : 0,
-    minFileSizeBytes: config.minFileSize ? parseSize(config.minFileSize) : 0,
-    minSplitSizeBytes: config.minSplitSize ? parseSize(config.minSplitSize) : parseSize("1GB"),
-    moveAsFolderThresholdPct: config.moveAsFolderThreshold
-      ? parseFloat(config.moveAsFolderThreshold)
-      : 0.9,
-    excludePatterns: config.exclude?.split(",").map((s) => s.trim()) ?? [],
-    pathPrefixes: config.pathFilter?.split(",").map((s) => s.trim()) ?? [],
-    srcDiskPaths: config.src?.split(",").map((s) => s.trim()),
-    debug: config.debug ?? false
-  };
-};
+const parseConfig = (config: PlanConfig) =>
+  Effect.gen(function* () {
+    const minSpaceBytes = config.minSpace ? yield* parseSize(config.minSpace) : 0;
+    const minFileSizeBytes = config.minFileSize ? yield* parseSize(config.minFileSize) : 0;
+    const minSplitSizeBytes = config.minSplitSize
+      ? yield* parseSize(config.minSplitSize)
+      : yield* parseSize("1GB");
+
+    return {
+      minSpaceBytes,
+      minFileSizeBytes,
+      minSplitSizeBytes,
+      moveAsFolderThresholdPct: config.moveAsFolderThreshold
+        ? parseFloat(config.moveAsFolderThreshold)
+        : 0.9,
+      excludePatterns: config.exclude?.split(",").map((s) => s.trim()) ?? [],
+      pathPrefixes: config.pathFilter?.split(",").map((s) => s.trim()) ?? [],
+      srcDiskPaths: config.src?.split(",").map((s) => s.trim()),
+      debug: config.debug ?? false
+    };
+  });
 
 export const createPlan = (diskPaths: string[] | readonly string[], config: PlanConfig) =>
   Effect.gen(function* () {
@@ -128,7 +135,7 @@ export const createPlan = (diskPaths: string[] | readonly string[], config: Plan
     const scannerService = yield* ScannerServiceTag;
     const planGenerator = yield* PlanGeneratorServiceTag;
 
-    const parsed = parseConfig(config);
+    const parsed = yield* parseConfig(config);
     yield* Effect.logDebug(`Config: src=${config.src}, dest=${config.dest}`);
     yield* Effect.logDebug(
       `Parsed srcDiskPaths: ${parsed.srcDiskPaths?.join(", ") ?? "undefined"}`

@@ -214,7 +214,7 @@ const rpc = new Hono()
 
             const poll = (): void => {
               if (!state.stopped) {
-                pollLogFile(state.position).then((newPosition) => {
+                void pollLogFile(state.position).then((newPosition) => {
                   state.position = newPosition;
                 });
               }

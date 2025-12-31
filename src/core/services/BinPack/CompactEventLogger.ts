@@ -1,5 +1,4 @@
 import { Schema } from "@effect/schema";
-import { Effect } from "effect";
 
 export type CompactEvent = string;
 

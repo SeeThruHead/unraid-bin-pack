@@ -114,9 +114,7 @@ exit 0
 `;
     }
 
-    const batchCommands = batches
-      .map((batch, i) => (batch ? generateBatchCommand(batch, i) : ""))
-      .join("");
+    const batchCommands = batches.map((batch, i) => generateBatchCommand(batch, i)).join("");
 
     const script = [
       generateHeader(options),

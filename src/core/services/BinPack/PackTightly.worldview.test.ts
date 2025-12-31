@@ -1,46 +1,22 @@
 /* eslint-disable no-console */
 import { describe, test, expect } from "bun:test";
-import { Effect } from "effect";
+import { Effect, pipe } from "effect";
 import { packTightly, type WorldViewSnapshot } from "./PackTightly";
-import type { WorldView } from "@domain/WorldView";
+import { createWorldView, addFile } from "@domain/WorldView";
 
 describe("PackTightly WorldView Snapshots", () => {
   test("should emit WorldView snapshots during consolidation", async () => {
     const snapshots: WorldViewSnapshot[] = [];
 
-    const initialWorldView: WorldView = {
-      disks: [
-        {
-          path: "/mnt/disk1",
-          totalBytes: 1000000000,
-          freeBytes: 100000000
-        },
-        {
-          path: "/mnt/disk2",
-          totalBytes: 1000000000,
-          freeBytes: 800000000
-        },
-        {
-          path: "/mnt/disk3",
-          totalBytes: 1000000000,
-          freeBytes: 950000000
-        }
-      ],
-      files: [
-        {
-          diskPath: "/mnt/disk1",
-          relativePath: "Movies/Movie1.mkv",
-          absolutePath: "/mnt/disk1/Movies/Movie1.mkv",
-          sizeBytes: 500000000
-        },
-        {
-          diskPath: "/mnt/disk1",
-          relativePath: "Movies/Movie2.mkv",
-          absolutePath: "/mnt/disk1/Movies/Movie2.mkv",
-          sizeBytes: 400000000
-        }
-      ]
-    };
+    const initialWorldView = pipe(
+      createWorldView([
+        { path: "/mnt/disk1", totalBytes: 1000000000, freeBytes: 1000000000 },
+        { path: "/mnt/disk2", totalBytes: 1000000000, freeBytes: 1000000000 },
+        { path: "/mnt/disk3", totalBytes: 1000000000, freeBytes: 1000000000 }
+      ]),
+      addFile("/mnt/disk1", "Movies/Movie1.mkv", 500000000),
+      addFile("/mnt/disk1", "Movies/Movie2.mkv", 400000000)
+    );
 
     const result = await Effect.runPromise(
       packTightly(initialWorldView, {
@@ -86,32 +62,15 @@ describe("PackTightly WorldView Snapshots", () => {
   test("should emit snapshot for each file move", async () => {
     const snapshots: WorldViewSnapshot[] = [];
 
-    const initialWorldView: WorldView = {
-      disks: [
-        { path: "/mnt/disk1", totalBytes: 1000000000, freeBytes: 200000000 },
-        { path: "/mnt/disk2", totalBytes: 1000000000, freeBytes: 900000000 }
-      ],
-      files: [
-        {
-          diskPath: "/mnt/disk1",
-          relativePath: "file1.mkv",
-          absolutePath: "/mnt/disk1/file1.mkv",
-          sizeBytes: 100000000
-        },
-        {
-          diskPath: "/mnt/disk1",
-          relativePath: "file2.mkv",
-          absolutePath: "/mnt/disk1/file2.mkv",
-          sizeBytes: 150000000
-        },
-        {
-          diskPath: "/mnt/disk1",
-          relativePath: "file3.mkv",
-          absolutePath: "/mnt/disk1/file3.mkv",
-          sizeBytes: 200000000
-        }
-      ]
-    };
+    const initialWorldView = pipe(
+      createWorldView([
+        { path: "/mnt/disk1", totalBytes: 1000000000, freeBytes: 1000000000 },
+        { path: "/mnt/disk2", totalBytes: 1000000000, freeBytes: 1000000000 }
+      ]),
+      addFile("/mnt/disk1", "file1.mkv", 100000000),
+      addFile("/mnt/disk1", "file2.mkv", 150000000),
+      addFile("/mnt/disk1", "file3.mkv", 200000000)
+    );
 
     await Effect.runPromise(
       packTightly(initialWorldView, {
@@ -140,20 +99,14 @@ describe("PackTightly WorldView Snapshots", () => {
   test("should show why files can't be moved", async () => {
     const snapshots: WorldViewSnapshot[] = [];
 
-    const initialWorldView: WorldView = {
-      disks: [
-        { path: "/mnt/disk1", totalBytes: 1000000000, freeBytes: 100000000 },
-        { path: "/mnt/disk2", totalBytes: 1000000000, freeBytes: 50000000 }
-      ],
-      files: [
-        {
-          diskPath: "/mnt/disk1",
-          relativePath: "huge-file.mkv",
-          absolutePath: "/mnt/disk1/huge-file.mkv",
-          sizeBytes: 800000000
-        }
-      ]
-    };
+    const initialWorldView = pipe(
+      createWorldView([
+        { path: "/mnt/disk1", totalBytes: 1000000000, freeBytes: 1000000000 },
+        { path: "/mnt/disk2", totalBytes: 1000000000, freeBytes: 1000000000 }
+      ]),
+      addFile("/mnt/disk1", "huge-file.mkv", 800000000),
+      addFile("/mnt/disk2", "filler.mkv", 950000000)
+    );
 
     await Effect.runPromise(
       packTightly(initialWorldView, {
