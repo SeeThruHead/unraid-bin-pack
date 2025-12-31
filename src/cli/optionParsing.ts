@@ -1,4 +1,4 @@
-import { parseSize } from "../lib/parseSize"
+import { parseSize } from "@lib/parseSize"
 
 export const splitCommaSeparated = (value: string | undefined): string[] =>
   value ? value.split(",").map((s) => s.trim()).filter((s) => s.length > 0) : []

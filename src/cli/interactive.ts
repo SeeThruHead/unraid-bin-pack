@@ -2,7 +2,7 @@ import { Prompt } from "@effect/cli"
 import { Effect, Console } from "effect"
 import type { Terminal, QuitException } from "@effect/platform/Terminal"
 import type { PlanOptions } from "./options"
-import type { Disk } from "../domain/Disk"
+import type { Disk } from "@domain/Disk"
 import { selectDirectoriesEffect } from "./treeSelect"
 
 export const interactivePlanPrompts = (

@@ -70,6 +70,11 @@ export const force = Options.boolean("force").pipe(
   Options.withDefault(false)
 )
 
+export const port = Options.integer("port").pipe(
+  Options.withDescription("Port for web server"),
+  Options.withDefault(3001)
+)
+
 export interface PlanOptions {
   readonly src: string | undefined
   readonly dest: string | undefined

@@ -1,0 +1,40 @@
+# Build stage for React app
+FROM oven/bun:1.3-alpine AS client-builder
+
+WORKDIR /app
+COPY package.json bun.lock ./
+COPY vite.config.ts tsconfig.json ./
+COPY src/web-client ./src/web-client
+
+# Install dependencies and build React app
+RUN bun install --frozen-lockfile
+RUN bun run web:build
+
+# Runtime stage
+FROM oven/bun:1.3-alpine
+
+# Install rsync for file transfers and bash for script execution
+RUN apk add --no-cache rsync bash
+
+WORKDIR /app
+
+# Copy package files and install production dependencies
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile --production
+
+# Copy server source
+COPY src/core ./src/core
+COPY src/web-server ./src/web-server
+COPY tsconfig.json ./
+
+# Copy built React app from builder stage
+COPY --from=client-builder /app/dist ./dist
+
+# Create config directory for plan scripts
+RUN mkdir -p /config
+
+# Expose port
+EXPOSE 3001
+
+# Run the web server
+CMD ["bun", "run", "src/web-server/main.ts"]

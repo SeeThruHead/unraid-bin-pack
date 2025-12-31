@@ -40,7 +40,22 @@ This will prompt you for mount points and create a `./unraid-bin-pack` script. T
 ./unraid-bin-pack apply
 ```
 
-### Manual Docker Usage
+### Docker Web Interface (Recommended)
+
+Run the web UI as a persistent service:
+
+```bash
+docker run -d \
+  --name unraid-bin-pack-web \
+  -p 3001:3001 \
+  -v /mnt:/mnt:ro \
+  -v /mnt/user/appdata/unraid-bin-pack:/config \
+  seethruhead/unraid-bin-pack:web
+```
+
+Then access the UI at **http://your-server-ip:3001**
+
+### Manual Docker CLI Usage
 
 ```bash
 # Create a plan (auto-discovers disks at /mnt/disk*)
@@ -48,7 +63,12 @@ docker run --rm -v /mnt:/mnt -v /mnt/user/appdata/unraid-bin-pack:/config seethr
 
 # Execute the plan
 docker run --rm -v /mnt:/mnt -v /mnt/user/appdata/unraid-bin-pack:/config seethruhead/unraid-bin-pack apply
+
+# View the plan
+docker run --rm -v /mnt:/mnt -v /mnt/user/appdata/unraid-bin-pack:/config seethruhead/unraid-bin-pack show
 ```
+
+**Note:** Plans created via CLI can be applied via web UI and vice versa - they share the same `/config/plan.sh` file.
 
 By default, `plan` will:
 - Auto-discover disks at `/mnt/disk*`
@@ -65,6 +85,25 @@ bun run src/main.ts plan --src /mnt/disk3 --dest /mnt/disk1,/mnt/disk2
 ```
 
 ## Commands
+
+### `web` - Start web interface
+
+Starts the web UI server for browser-based plan management.
+
+```bash
+unraid-bin-pack web [options]
+
+Options:
+  --port <number>  Port for web server (default: 3001)
+```
+
+The web interface provides:
+- Clean disk selection with card-based layout
+- Pattern-based folder selection (matches folders across all disks)
+- File type filtering with "Everything" option
+- Visual plan creation and review
+- One-click plan execution with dry-run support
+- Real-time progress feedback
 
 ### `plan` - Generate a move plan
 
@@ -301,10 +340,24 @@ bun run check
 bun run src/main.ts plan --help
 ```
 
-### Build Docker Image
+### Build Docker Images
 
 ```bash
-docker build -t unraid-bin-pack .
+# Build CLI image
+docker build -t seethruhead/unraid-bin-pack:latest .
+
+# Build web server image
+docker build -f Dockerfile.web -t seethruhead/unraid-bin-pack:web .
+
+# Push both images
+docker push seethruhead/unraid-bin-pack:latest
+docker push seethruhead/unraid-bin-pack:web
+
+# Or use test tags for testing
+docker build -t seethruhead/unraid-bin-pack:test .
+docker build -f Dockerfile.web -t seethruhead/unraid-bin-pack:test-web .
+docker push seethruhead/unraid-bin-pack:test
+docker push seethruhead/unraid-bin-pack:test-web
 ```
 
 ## Testing

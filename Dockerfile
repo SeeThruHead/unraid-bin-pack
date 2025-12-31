@@ -14,15 +14,13 @@ RUN bun install --frozen-lockfile
 # Copy source code
 COPY src ./src
 COPY tsconfig.json ./
+COPY vite.config.ts ./
 
-# Default plan storage location
-ENV PLAN_FILE=/config/plan.json
+# Build the frontend
+RUN bun run web:build
 
 # Create config directory for plan storage
 RUN mkdir -p /config
 
-# Entry point
-ENTRYPOINT ["bun", "run", "src/main.ts"]
-
-# Default command shows help
-CMD ["--help"]
+# Entry point runs web server
+ENTRYPOINT ["bun", "run", "src/cli/main.ts", "web"]

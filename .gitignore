@@ -5,6 +5,10 @@ node_modules
 out
 dist
 *.tgz
+.vitepress/dist
+.vitepress/cache
+docs/.vitepress/dist
+docs/.vitepress/cache
 
 # code coverage
 coverage
@@ -32,3 +36,4 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Finder (MacOS) folder config
 .DS_Store
+.next/
