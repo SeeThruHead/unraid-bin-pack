@@ -4,19 +4,22 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "prepare": "bun run patch",
+    "patch": "effect-tsgo patch --oxlint",
+    "unpatch": "effect-tsgo unpatch --oxlint",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix",
+    "lint": "oxlint --type-aware --deny-warnings -c .oxlintrc.json src",
+    "lint:fix": "oxlint --type-aware --deny-warnings -c .oxlintrc.json --fix src",
     "check": "bun run typecheck && bun run lint && bun test",
     "dev": "bun run src/main.ts"
   },
   "devDependencies": {
+    "@effect/tsgo": "0.64.1",
     "@types/bun": "latest",
-    "@typescript-eslint/eslint-plugin": "^8.50.1",
-    "@typescript-eslint/parser": "^8.50.1",
-    "eslint": "^9.39.2",
-    "typescript": "^5"
+    "oxlint": "1.90.0",
+    "oxlint-tsgolint": "7.0.2005",
+    "typescript": "7.0.2"
   },
   "dependencies": {
     "@effect/platform-bun": "4.1.2",
