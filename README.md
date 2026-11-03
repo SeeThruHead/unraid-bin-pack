@@ -194,10 +194,7 @@ export interface DiskService {
 }
 
 // Service tag for dependency injection
-export class DiskServiceTag extends Context.Tag("DiskService")<
-  DiskServiceTag,
-  DiskService
->() {}
+export class DiskServiceTag extends Context.Service<DiskServiceTag, DiskService>()("DiskService") {}
 
 // Implementation as Effect Layer
 export const DiskServiceLive = Layer.effect(
@@ -368,7 +365,7 @@ expect(ctx.calls.planStorage.filter(c => c.method === "save")).toHaveLength(1)
 ### Adding a New Service
 
 1. Define the interface in a new file under `services/` or `infra/`
-2. Create a `Context.Tag` for dependency injection
+2. Create a `Context.Service` for dependency injection
 3. Implement as a `Layer.effect` or `Layer.succeed`
 4. Add typed errors using `Data.TaggedError`
 5. Write unit tests with mocked dependencies
@@ -388,10 +385,7 @@ export interface MyService {
 }
 
 // 3. Tag
-export class MyServiceTag extends Context.Tag("MyService")<
-  MyServiceTag,
-  MyService
->() {}
+export class MyServiceTag extends Context.Service<MyServiceTag, MyService>()("MyService") {}
 
 // 4. Implementation
 export const MyServiceLive = Layer.effect(
