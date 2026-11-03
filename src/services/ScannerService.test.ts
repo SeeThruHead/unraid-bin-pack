@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Effect, Layer, pipe } from "effect"
-import { BunContext } from "@effect/platform-bun"
+import { BunServices } from "@effect/platform-bun"
 import { ScannerServiceTag, ScannerServiceLive } from "./ScannerService"
 import { GlobServiceTag, GlobServiceLive } from "../infra/GlobService"
 import { FileStatServiceTag, FileStatServiceLive } from "../infra/FileStatService"
@@ -84,7 +84,7 @@ const RealScannerService = pipe(
   ScannerServiceLive,
   Layer.provide(GlobServiceLive),
   Layer.provide(FileStatServiceLive),
-  Layer.provide(BunContext.layer)
+  Layer.provide(BunServices.layer)
 )
 
 describe("ScannerService (integration tests)", () => {

@@ -35,10 +35,7 @@ export interface DiskStatsService {
   readonly getStats: (path: string) => Effect.Effect<{ free: number; size: number }, DiskStatsError>
 }
 
-export class DiskStatsServiceTag extends Context.Tag("DiskStatsService")<
-  DiskStatsServiceTag,
-  DiskStatsService
->() {}
+export class DiskStatsServiceTag extends Context.Service<DiskStatsServiceTag, DiskStatsService>()("DiskStatsService") {}
 
 // =============================================================================
 // Error detection from check-disk-space errors

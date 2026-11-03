@@ -2,10 +2,10 @@
  * CLI handlers - orchestrate services for plan and apply commands.
  */
 
-import { Effect, Either, pipe, Layer, Logger, LogLevel } from "effect"
+import { Effect, Result, pipe, Layer, References } from "effect"
 import { Console } from "effect"
-import { BunContext } from "@effect/platform-bun"
-import { FileSystem } from "@effect/platform"
+import { BunServices } from "@effect/platform-bun"
+import { FileSystem } from "effect"
 
 import type { PlanOptions, ApplyOptions } from "./options"
 import { parseSize, formatSize } from "../lib/parseSize"
@@ -219,7 +219,7 @@ export const withErrorHandling = <A, R>(
 ): Effect.Effect<void, never, R> =>
   pipe(
     effect,
-    Effect.catchAll((error) => {
+    Effect.catch((error) => {
       const appError = fromDomainError(error)
       return Console.error(`\n${appError.format()}`)
     }),
@@ -391,10 +391,10 @@ export const runPlan = (options: PlanOptions, isInteractive: boolean = false) =>
       // Try to load the plan
       const loadResult = yield* pipe(
         planStorage.load(planPath),
-        Effect.either
+        Effect.result
       )
 
-      if (Either.isLeft(loadResult)) {
+      if (Result.isFailure(loadResult)) {
         // Plan exists but can't be loaded (incompatible schema, corrupt, etc.)
         yield* Console.error(`\nERROR: An existing plan file at "${planPath}" cannot be loaded.`)
         yield* Console.error(`   This may be an old or incompatible plan format.`)
@@ -403,7 +403,7 @@ export const runPlan = (options: PlanOptions, isInteractive: boolean = false) =>
       }
 
       // Plan loaded successfully - check if it has progress
-      const existingPlan = loadResult.right
+      const existingPlan = loadResult.success
       const moves = Object.values(existingPlan.moves)
       const completed = moves.filter((m) => m.status === "completed").length
       const failed = moves.filter((m) => m.status === "failed").length
@@ -520,7 +520,7 @@ export const runPlan = (options: PlanOptions, isInteractive: boolean = false) =>
     if (finalOptions.force && planExists) {
       yield* pipe(
         planStorage.delete(planPath),
-        Effect.catchAll(() => Effect.void)
+        Effect.catch(() => Effect.void)
       )
     }
 
@@ -545,7 +545,7 @@ export const runPlan = (options: PlanOptions, isInteractive: boolean = false) =>
         try: () => Bun.$`chmod +x ${scriptPath}`.quiet(),
         catch: () => null,
       }),
-      Effect.catchAll(() => Effect.void)
+      Effect.catch(() => Effect.void)
     )
 
     yield* logger.plan.planSaved
@@ -579,7 +579,7 @@ export const runApply = (options: ApplyOptions) =>
     const scriptExists = yield* pipe(
       fs.access(scriptPath),
       Effect.map(() => true),
-      Effect.catchAll(() => Effect.succeed(false))
+      Effect.catch(() => Effect.succeed(false))
     )
 
     if (!scriptExists) {
@@ -662,7 +662,7 @@ export const createAppLayer = () => {
         ScannerServiceLive,
         Layer.provide(GlobServiceLive),
         Layer.provide(FileStatServiceLive),
-        Layer.provide(BunContext.layer)
+        Layer.provide(BunServices.layer)
       ),
       pipe(RsyncTransferService, Layer.provide(ShellServiceLive)),
       SqlitePlanStorageService

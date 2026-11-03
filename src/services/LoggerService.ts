@@ -62,10 +62,7 @@ export interface LoggerService {
   }
 }
 
-export class LoggerServiceTag extends Context.Tag("LoggerService")<
-  LoggerServiceTag,
-  LoggerService
->() {}
+export class LoggerServiceTag extends Context.Service<LoggerServiceTag, LoggerService>()("LoggerService") {}
 
 // =============================================================================
 // Implementation

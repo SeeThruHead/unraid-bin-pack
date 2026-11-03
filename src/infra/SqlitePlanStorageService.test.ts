@@ -77,13 +77,13 @@ describe("SqlitePlanStorageService", () => {
       PlanStorageServiceTag,
       Effect.flatMap((svc) => svc.load(join(testDir, "nonexistent.db"))),
       Effect.provide(service),
-      Effect.either,
+      Effect.result,
       Effect.runPromise
     )
 
-    expect(result._tag).toBe("Left")
-    if (result._tag === "Left") {
-      const error = result.left as PlanStorageError
+    expect(result._tag).toBe("Failure")
+    if (result._tag === "Failure") {
+      const error = result.failure as PlanStorageError
       expect(error._tag).toBe("PlanNotFound")
     }
   })

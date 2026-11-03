@@ -282,7 +282,7 @@ const rankDisksByFullness = (worldView: WorldView): ReadonlyArray<DiskWithUsage>
       // Only include disks with files on them
       return worldView.files.some((f) => f.diskPath === disk.path)
     }),
-    Array.sort(Order.mapInput(Order.number, (d: DiskWithUsage) => d.usedPct)) // Ascending
+    Array.sort(Order.mapInput(Order.Number, (d: DiskWithUsage) => d.usedPct)) // Ascending
   )
 
 // =============================================================================

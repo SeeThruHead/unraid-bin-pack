@@ -5,8 +5,7 @@
  * about the underlying infra services (DiskStatsService, FileSystem).
  */
 
-import { Context, Data, Effect, Layer, pipe } from "effect"
-import { FileSystem } from "@effect/platform"
+import { Context, Data, Effect, FileSystem, Layer, Match, pipe, type PlatformError } from "effect"
 import { DiskStatsServiceTag, DiskStatsServiceLive } from "../infra/DiskStatsService"
 import type { Disk } from "../domain/Disk"
 
@@ -52,7 +51,7 @@ export interface DiskService {
   readonly autoDiscover: () => Effect.Effect<string[], DiskError>
 }
 
-export class DiskServiceTag extends Context.Tag("DiskService")<DiskServiceTag, DiskService>() {}
+export class DiskServiceTag extends Context.Service<DiskServiceTag, DiskService>()("DiskService") {}
 
 // =============================================================================
 // Helpers
@@ -91,6 +90,13 @@ const toDiskError = (path: string, error: unknown): DiskError => {
 
   return new DiskStatsFailed({ path, reason: message })
 }
+
+const fromPlatformError = (path: string, error: PlatformError.PlatformError): DiskError =>
+  Match.value(error.reason._tag).pipe(
+    Match.when("NotFound", () => new DiskNotFound({ path })),
+    Match.when("PermissionDenied", () => new DiskPermissionDenied({ path })),
+    Match.orElse(() => new DiskStatsFailed({ path, reason: error.message }))
+  )
 
 // =============================================================================
 // Live implementation
@@ -134,16 +140,7 @@ export const DiskServiceLive = Layer.effect(
             return yield* Effect.fail(new DiskNotAMountPoint({ path }))
           }
         }),
-        // Catch any FileSystem errors and transform to DiskError
-        Effect.catchAll((e) => {
-          // If it's already a DiskError, pass it through
-          if (e instanceof DiskNotFound || e instanceof DiskNotADirectory ||
-              e instanceof DiskNotAMountPoint || e instanceof DiskPermissionDenied ||
-              e instanceof DiskStatsFailed) {
-            return Effect.fail(e)
-          }
-          return Effect.fail(toDiskError(path, e))
-        })
+        Effect.mapError((e) => (e._tag === "PlatformError" ? fromPlatformError(path, e) : e))
       )
 
     /**
@@ -161,7 +158,7 @@ export const DiskServiceLive = Layer.effect(
               freeBytes: free,
             })),
             // Transform DiskStatsService errors
-            Effect.catchAll((e) => Effect.fail(toDiskError(path, e)))
+            Effect.catch((e) => Effect.fail(toDiskError(path, e)))
           )
         )
       )
@@ -186,7 +183,7 @@ export const DiskServiceLive = Layer.effect(
                 return numA - numB
               })
           ),
-          Effect.catchAll((e) => Effect.fail(toDiskError("/mnt", e)))
+          Effect.mapError((e) => fromPlatformError("/mnt", e))
         ),
     }
   })

@@ -5,7 +5,7 @@
 import { describe, test, expect } from "bun:test"
 import { Effect } from "effect"
 import type { FileMove } from "../domain/MovePlan"
-import type { DiskStats } from "../domain/Disk"
+import type { DiskStat } from "../infra/PlanStorageService"
 import { PlanScriptGenerator } from "./PlanScriptGenerator"
 
 describe("PlanScriptGenerator", () => {
@@ -24,7 +24,7 @@ describe("PlanScriptGenerator", () => {
       },
     ]
 
-    const diskStats: Record<string, DiskStats> = {
+    const diskStats: Record<string, DiskStat> = {
       "/mnt/disk1": { totalBytes: 1000000000, freeBytes: 500000000, bytesToMove: 1000000 },
       "/mnt/disk2": { totalBytes: 1000000000, freeBytes: 900000000, bytesToMove: 0 },
     }
@@ -57,7 +57,7 @@ describe("PlanScriptGenerator", () => {
       },
     ]
 
-    const diskStats: Record<string, DiskStats> = {
+    const diskStats: Record<string, DiskStat> = {
       "/mnt/disk1": { totalBytes: 1000000000, freeBytes: 100000000, bytesToMove: 5000000000 },
       "/mnt/disk2": { totalBytes: 1000000000, freeBytes: 900000000, bytesToMove: 0 },
     }
@@ -113,7 +113,7 @@ describe("PlanScriptGenerator", () => {
       },
     ]
 
-    const diskStats: Record<string, DiskStats> = {
+    const diskStats: Record<string, DiskStat> = {
       "/mnt/disk1": { totalBytes: 1000000000, freeBytes: 100000000, bytesToMove: 3000000 },
       "/mnt/disk2": { totalBytes: 1000000000, freeBytes: 900000000, bytesToMove: 0 },
       "/mnt/disk3": { totalBytes: 1000000000, freeBytes: 900000000, bytesToMove: 0 },
@@ -164,7 +164,7 @@ describe("PlanScriptGenerator", () => {
       },
     ]
 
-    const diskStats: Record<string, DiskStats> = {
+    const diskStats: Record<string, DiskStat> = {
       "/mnt/disk1": { totalBytes: 1000000000, freeBytes: 100000000, bytesToMove: 2000000 },
       "/mnt/disk2": { totalBytes: 1000000000, freeBytes: 900000000, bytesToMove: 0 },
       "/mnt/disk3": { totalBytes: 1000000000, freeBytes: 900000000, bytesToMove: 0 },
@@ -200,7 +200,7 @@ describe("PlanScriptGenerator", () => {
       },
     ]
 
-    const diskStats: Record<string, DiskStats> = {
+    const diskStats: Record<string, DiskStat> = {
       "/mnt/disk8": { totalBytes: 1000000000, freeBytes: 100000000, bytesToMove: 5000000000 },
       "/mnt/disk1": { totalBytes: 1000000000, freeBytes: 900000000, bytesToMove: 0 },
     }
@@ -246,7 +246,7 @@ describe("PlanScriptGenerator", () => {
       },
     ]
 
-    const diskStats: Record<string, DiskStats> = {
+    const diskStats: Record<string, DiskStat> = {
       "/mnt/disk1": { totalBytes: 1000000000, freeBytes: 100000000, bytesToMove: 2000000 },
       "/mnt/disk2": { totalBytes: 1000000000, freeBytes: 900000000, bytesToMove: 0 },
     }
@@ -305,7 +305,7 @@ describe("PlanScriptGenerator", () => {
       },
     ]
 
-    const diskStats: Record<string, DiskStats> = {
+    const diskStats: Record<string, DiskStat> = {
       "/mnt/disk1": { totalBytes: 1000000000, freeBytes: 100000000, bytesToMove: 3000000 },
       "/mnt/disk2": { totalBytes: 1000000000, freeBytes: 900000000, bytesToMove: 0 },
     }

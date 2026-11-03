@@ -9,7 +9,7 @@
  * 3. How to fix it
  */
 
-import { Match } from "effect"
+import { Match, PlatformError } from "effect"
 
 // Import all domain error types for exhaustive matching
 import type {
@@ -301,6 +301,9 @@ const isPermissionError = (message: string): boolean =>
   message.toLowerCase().includes("operation not permitted") ||
   message.toLowerCase().includes("eperm")
 
+const isPlatformPermissionError = (error: unknown): error is PlatformError.PlatformError =>
+  error instanceof PlatformError.PlatformError && error.reason._tag === "PermissionDenied"
+
 // =============================================================================
 // Main conversion function
 // =============================================================================
@@ -319,6 +322,10 @@ export const fromDomainError = (error: unknown): AppError => {
       // Fall through to generic handling if tag not matched
       // (handles legacy error types during migration)
     }
+  }
+
+  if (isPlatformPermissionError(error)) {
+    return errors.permissionDenied(error.message)
   }
 
   // Standard Error

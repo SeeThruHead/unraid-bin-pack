@@ -118,10 +118,7 @@ export interface TerminalUIService {
   readonly formatSummary: (progress: OverallProgress) => string
 }
 
-export class TerminalUIServiceTag extends Context.Tag("TerminalUIService")<
-  TerminalUIServiceTag,
-  TerminalUIService
->() {}
+export class TerminalUIServiceTag extends Context.Service<TerminalUIServiceTag, TerminalUIService>()("TerminalUIService") {}
 
 // =============================================================================
 // Live implementation

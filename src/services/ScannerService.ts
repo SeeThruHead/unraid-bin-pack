@@ -73,10 +73,7 @@ export interface ScannerService {
   ) => Effect.Effect<FileEntry[], ScannerError>
 }
 
-export class ScannerServiceTag extends Context.Tag("ScannerService")<
-  ScannerServiceTag,
-  ScannerService
->() {}
+export class ScannerServiceTag extends Context.Service<ScannerServiceTag, ScannerService>()("ScannerService") {}
 
 // =============================================================================
 // Live implementation

@@ -84,10 +84,7 @@ export interface TransferService {
   ) => Effect.Effect<TransferReport, TransferError>
 }
 
-export class TransferServiceTag extends Context.Tag("TransferService")<
-  TransferServiceTag,
-  TransferService
->() {}
+export class TransferServiceTag extends Context.Service<TransferServiceTag, TransferService>()("TransferService") {}
 
 // =============================================================================
 // Batch types
@@ -218,7 +215,7 @@ export const RsyncTransferService = Layer.effect(
             success: true,
           }))
         }),
-        Effect.catchAll((e) =>
+        Effect.catch((e) =>
           Effect.succeed(
             batch.moves.map((move) => ({
               move,

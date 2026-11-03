@@ -12,7 +12,7 @@
 
 import { Effect } from "effect"
 import type { FileMove } from "../domain/MovePlan"
-import type { DiskStats } from "../domain/Disk"
+import type { DiskStat } from "../infra/PlanStorageService"
 
 // =============================================================================
 // Types
@@ -21,7 +21,7 @@ import type { DiskStats } from "../domain/Disk"
 export interface PlanScriptOptions {
   readonly moves: readonly FileMove[]
   readonly sourceDisk: string
-  readonly diskStats: Record<string, DiskStats>
+  readonly diskStats: Record<string, DiskStat>
   readonly concurrency: number
 }
 

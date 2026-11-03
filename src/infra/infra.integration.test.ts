@@ -9,7 +9,7 @@
 
 import { describe, expect, test, beforeAll, afterAll } from "bun:test"
 import { Effect, Layer, pipe } from "effect"
-import { BunContext } from "@effect/platform-bun"
+import { BunServices } from "@effect/platform-bun"
 import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -79,13 +79,13 @@ describe("GlobService (real IO)", () => {
       GlobServiceTag,
       Effect.flatMap((svc) => svc.scan("**/*", "/nonexistent/path/xyz", { onlyFiles: true })),
       Effect.provide(service),
-      Effect.either,
+      Effect.result,
       Effect.runPromise
     )
 
-    expect(result._tag).toBe("Left")
-    if (result._tag === "Left") {
-      const error = result.left as GlobError
+    expect(result._tag).toBe("Failure")
+    if (result._tag === "Failure") {
+      const error = result.failure as GlobError
       expect(error._tag).toBe("GlobNotFound")
       if (error._tag === "GlobNotFound") {
         expect(error.path).toBe("/nonexistent/path/xyz")
@@ -99,7 +99,7 @@ describe("GlobService (real IO)", () => {
 // =============================================================================
 
 describe("FileStatService (real IO)", () => {
-  const service = pipe(FileStatServiceLive, Layer.provide(BunContext.layer))
+  const service = pipe(FileStatServiceLive, Layer.provide(BunServices.layer))
 
   test("stat returns size for existing file", async () => {
     const result = await pipe(
@@ -117,13 +117,13 @@ describe("FileStatService (real IO)", () => {
       FileStatServiceTag,
       Effect.flatMap((svc) => svc.stat(join(testDir, "nonexistent.txt"))),
       Effect.provide(service),
-      Effect.either,
+      Effect.result,
       Effect.runPromise
     )
 
-    expect(result._tag).toBe("Left")
-    if (result._tag === "Left") {
-      const error = result.left as FileStatError
+    expect(result._tag).toBe("Failure")
+    if (result._tag === "Failure") {
+      const error = result.failure as FileStatError
       expect(error._tag).toBe("FileNotFound")
     }
   })
@@ -214,13 +214,13 @@ describe("PlanStorageService (real IO)", () => {
       PlanStorageServiceTag,
       Effect.flatMap((svc) => svc.load(join(testDir, "nonexistent-plan.json"))),
       Effect.provide(service),
-      Effect.either,
+      Effect.result,
       Effect.runPromise
     )
 
-    expect(result._tag).toBe("Left")
-    if (result._tag === "Left") {
-      const error = result.left as PlanStorageError
+    expect(result._tag).toBe("Failure")
+    if (result._tag === "Failure") {
+      const error = result.failure as PlanStorageError
       // Should be PlanNotFound (typed error)
       expect(error._tag).toBe("PlanNotFound")
     }
@@ -395,13 +395,13 @@ describe("GlobService typed errors with real IO", () => {
       GlobServiceTag,
       Effect.flatMap((svc) => svc.scan("**/*", "/nonexistent/path/xyz", { onlyFiles: true })),
       Effect.provide(service),
-      Effect.either,
+      Effect.result,
       Effect.runPromise
     )
 
-    expect(result._tag).toBe("Left")
-    if (result._tag === "Left") {
-      const error = result.left as GlobError
+    expect(result._tag).toBe("Failure")
+    if (result._tag === "Failure") {
+      const error = result.failure as GlobError
       expect(error._tag).toBe("GlobNotFound")
       if (error._tag === "GlobNotFound") {
         expect(error.path).toBe("/nonexistent/path/xyz")
@@ -411,20 +411,20 @@ describe("GlobService typed errors with real IO", () => {
 })
 
 describe("FileStatService typed errors with real IO", () => {
-  const service = pipe(FileStatServiceLive, Layer.provide(BunContext.layer))
+  const service = pipe(FileStatServiceLive, Layer.provide(BunServices.layer))
 
   test("real fs.stat ENOENT produces FileNotFound error", async () => {
     const result = await pipe(
       FileStatServiceTag,
       Effect.flatMap((svc) => svc.stat("/nonexistent/path/that/does/not/exist")),
       Effect.provide(service),
-      Effect.either,
+      Effect.result,
       Effect.runPromise
     )
 
-    expect(result._tag).toBe("Left")
-    if (result._tag === "Left") {
-      const error = result.left as FileStatError
+    expect(result._tag).toBe("Failure")
+    if (result._tag === "Failure") {
+      const error = result.failure as FileStatError
       expect(error._tag).toBe("FileNotFound")
       if (error._tag === "FileNotFound") {
         expect(error.path).toBe("/nonexistent/path/that/does/not/exist")

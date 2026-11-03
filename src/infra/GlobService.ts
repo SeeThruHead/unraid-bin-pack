@@ -38,10 +38,7 @@ export interface GlobService {
   ) => Effect.Effect<string[], GlobError>
 }
 
-export class GlobServiceTag extends Context.Tag("GlobService")<
-  GlobServiceTag,
-  GlobService
->() {}
+export class GlobServiceTag extends Context.Service<GlobServiceTag, GlobService>()("GlobService") {}
 
 // =============================================================================
 // Error detection from Bun.Glob errors

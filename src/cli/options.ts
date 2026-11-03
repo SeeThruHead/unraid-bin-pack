@@ -7,7 +7,7 @@
  * - General files (documents, backups, etc.)
  */
 
-import { Options } from "@effect/cli"
+import { Flag } from "effect/cli"
 
 // =============================================================================
 // Plan Command Options
@@ -19,9 +19,9 @@ import { Options } from "@effect/cli"
  *
  * @example "/mnt/disk3"
  */
-export const src = Options.text("src").pipe(
-  Options.withDescription("Source disk to move files from. Auto-selects least full if not set."),
-  Options.optional
+export const src = Flag.String("src").pipe(
+  Flag.withDescription("Source disk to move files from. Auto-selects least full if not set."),
+  Flag.optional
 )
 
 /**
@@ -30,9 +30,9 @@ export const src = Options.text("src").pipe(
  *
  * @example "/mnt/disk1,/mnt/disk2"
  */
-export const dest = Options.text("dest").pipe(
-  Options.withDescription("Destination disk paths (comma-separated). Auto-discovers if not set."),
-  Options.optional
+export const dest = Flag.String("dest").pipe(
+  Flag.withDescription("Destination disk paths (comma-separated). Auto-discovers if not set."),
+  Flag.optional
 )
 
 /**
@@ -41,9 +41,9 @@ export const dest = Options.text("dest").pipe(
  *
  * Accepts human-readable sizes: 50MB, 1GB, 500K, etc.
  */
-export const minSpace = Options.text("min-space").pipe(
-  Options.withDescription("Min free space to leave on each disk (e.g., 50MB, 1GB)"),
-  Options.optional
+export const minSpace = Flag.String("min-space").pipe(
+  Flag.withDescription("Min free space to leave on each disk (e.g., 50MB, 1GB)"),
+  Flag.optional
 )
 
 /**
@@ -52,9 +52,9 @@ export const minSpace = Options.text("min-space").pipe(
  *
  * Accepts human-readable sizes: 1MB, 500KB, etc.
  */
-export const minFileSize = Options.text("min-file-size").pipe(
-  Options.withDescription("Min file size to move (e.g., 1MB, 500KB)"),
-  Options.optional
+export const minFileSize = Flag.String("min-file-size").pipe(
+  Flag.withDescription("Min file size to move (e.g., 1MB, 500KB)"),
+  Flag.optional
 )
 
 /**
@@ -62,9 +62,9 @@ export const minFileSize = Options.text("min-file-size").pipe(
  * Only files under these paths will be considered for consolidation.
  * Empty string means no filter (all paths).
  */
-export const pathFilter = Options.text("path-filter").pipe(
-  Options.withDescription("Path prefixes to include (e.g., '/media/Movies,/media/TV')"),
-  Options.optional
+export const pathFilter = Flag.String("path-filter").pipe(
+  Flag.withDescription("Path prefixes to include (e.g., '/media/Movies,/media/TV')"),
+  Flag.optional
 )
 
 /**
@@ -75,9 +75,9 @@ export const pathFilter = Options.text("path-filter").pipe(
  * @example "*.mkv,*.mp4" - only move video folders
  * @example "*.flac,*.mp3" - only move music folders
  */
-export const include = Options.text("include").pipe(
-  Options.withDescription("File patterns to include (e.g., '*.mkv,*.mp4')"),
-  Options.optional
+export const include = Flag.String("include").pipe(
+  Flag.withDescription("File patterns to include (e.g., '*.mkv,*.mp4')"),
+  Flag.optional
 )
 
 /**
@@ -85,9 +85,9 @@ export const include = Options.text("include").pipe(
  *
  * @example ".DS_Store,*.tmp,@eaDir"
  */
-export const exclude = Options.text("exclude").pipe(
-  Options.withDescription("Patterns to exclude (e.g., '.DS_Store,@eaDir')"),
-  Options.optional
+export const exclude = Flag.String("exclude").pipe(
+  Flag.withDescription("Patterns to exclude (e.g., '.DS_Store,@eaDir')"),
+  Flag.optional
 )
 
 // =============================================================================
@@ -100,9 +100,9 @@ export const exclude = Options.text("exclude").pipe(
  *
  * Accepts human-readable sizes: 500MB, 1GB, etc.
  */
-export const minSplitSize = Options.text("min-split-size").pipe(
-  Options.withDescription("Folders smaller than this stay together (e.g., 1GB)"),
-  Options.optional
+export const minSplitSize = Flag.String("min-split-size").pipe(
+  Flag.withDescription("Folders smaller than this stay together (e.g., 1GB)"),
+  Flag.optional
 )
 
 /**
@@ -111,9 +111,9 @@ export const minSplitSize = Options.text("min-split-size").pipe(
  *
  * @example 0.9 means if one file is 90%+ of the folder, keep together
  */
-export const moveAsFolderThreshold = Options.text("move-as-folder-threshold").pipe(
-  Options.withDescription("Keep folder together if largest file is this % of total (0.0-1.0)"),
-  Options.optional
+export const moveAsFolderThreshold = Flag.String("move-as-folder-threshold").pipe(
+  Flag.withDescription("Keep folder together if largest file is this % of total (0.0-1.0)"),
+  Flag.optional
 )
 
 // =============================================================================
@@ -126,26 +126,26 @@ export const moveAsFolderThreshold = Options.text("move-as-folder-threshold").pi
  *
  * @default 4
  */
-export const concurrency = Options.integer("concurrency").pipe(
-  Options.withDescription("Parallel transfers (default: 4)"),
-  Options.withDefault(4)
+export const concurrency = Flag.Int("concurrency").pipe(
+  Flag.withDescription("Parallel transfers (default: 4)"),
+  Flag.withDefault(4)
 )
 
 /**
  * Show what would be transferred without actually doing it.
  * Runs rsync with --dry-run flag.
  */
-export const dryRun = Options.boolean("dry-run").pipe(
-  Options.withDescription("Preview transfers without executing"),
-  Options.withDefault(false)
+export const dryRun = Flag.Boolean("dry-run").pipe(
+  Flag.withDescription("Preview transfers without executing"),
+  Flag.withDefault(false)
 )
 
 /**
  * Enable debug logging for troubleshooting.
  */
-export const debug = Options.boolean("debug").pipe(
-  Options.withDescription("Enable verbose debug logging"),
-  Options.withDefault(false)
+export const debug = Flag.Boolean("debug").pipe(
+  Flag.withDescription("Enable verbose debug logging"),
+  Flag.withDefault(false)
 )
 
 // =============================================================================
@@ -157,18 +157,18 @@ export const debug = Options.boolean("debug").pipe(
  *
  * @default /config/plan.sh
  */
-export const planFile = Options.file("plan-file").pipe(
-  Options.withDescription("Path to plan script"),
-  Options.optional
+export const planFile = Flag.File("plan-file").pipe(
+  Flag.withDescription("Path to plan script"),
+  Flag.optional
 )
 
 /**
  * Force overwrite of existing plan, even if partially executed.
  * Use with caution - will lose progress on incomplete plans.
  */
-export const force = Options.boolean("force").pipe(
-  Options.withDescription("Overwrite existing plan without prompting"),
-  Options.withDefault(false)
+export const force = Flag.Boolean("force").pipe(
+  Flag.withDescription("Overwrite existing plan without prompting"),
+  Flag.withDefault(false)
 )
 
 // =============================================================================

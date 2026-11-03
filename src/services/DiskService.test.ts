@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Effect, Layer, pipe } from "effect"
-import { FileSystem } from "@effect/platform"
-import { BunContext } from "@effect/platform-bun"
+import { FileSystem } from "effect"
+import { BunServices } from "@effect/platform-bun"
 import { DiskServiceTag, DiskServiceLive, DiskServiceFullLive } from "./DiskService"
 import { DiskStatsServiceTag } from "../infra/DiskStatsService"
 
@@ -119,14 +119,14 @@ describe("DiskService (unit tests with stub)", () => {
       DiskServiceTag,
       Effect.flatMap((svc) => svc.getStats("/nonexistent")),
       Effect.provide(TestLayer),
-      Effect.either,
+      Effect.result,
       Effect.runPromise
     )
 
-    expect(result._tag).toBe("Left")
-    if (result._tag === "Left") {
-      expect(result.left._tag).toBe("DiskNotFound")
-      expect(result.left.path).toBe("/nonexistent")
+    expect(result._tag).toBe("Failure")
+    if (result._tag === "Failure") {
+      expect(result.failure._tag).toBe("DiskNotFound")
+      expect(result.failure.path).toBe("/nonexistent")
     }
   })
 })
@@ -138,7 +138,7 @@ describe("DiskService (unit tests with stub)", () => {
 describe("DiskService (integration tests)", () => {
   test("getStats works on root path", async () => {
     // Root "/" is always a mount point
-    const TestLayer = pipe(DiskServiceFullLive, Layer.provide(BunContext.layer))
+    const TestLayer = pipe(DiskServiceFullLive, Layer.provide(BunServices.layer))
 
     const result = await pipe(
       DiskServiceTag,
@@ -155,21 +155,21 @@ describe("DiskService (integration tests)", () => {
 
   test("fails on non-mount-point directory", async () => {
     // /tmp is typically NOT a separate mount point on macOS
-    const TestLayer = pipe(DiskServiceFullLive, Layer.provide(BunContext.layer))
+    const TestLayer = pipe(DiskServiceFullLive, Layer.provide(BunServices.layer))
 
     const result = await pipe(
       DiskServiceTag,
       Effect.flatMap((svc) => svc.getStats("/tmp")),
       Effect.provide(TestLayer),
-      Effect.either,
+      Effect.result,
       Effect.runPromise
     )
 
     // On most systems, /tmp is not a mount point
-    expect(result._tag).toBe("Left")
-    if (result._tag === "Left") {
-      expect(result.left._tag).toBe("DiskNotAMountPoint")
-      expect(result.left.path).toBe("/tmp")
+    expect(result._tag).toBe("Failure")
+    if (result._tag === "Failure") {
+      expect(result.failure._tag).toBe("DiskNotAMountPoint")
+      expect(result.failure.path).toBe("/tmp")
     }
   })
 })

@@ -272,7 +272,7 @@ export const SqlitePlanStorageService = Layer.succeed(
           return file.size > 0
         },
         catch: () => false,
-      }).pipe(Effect.catchAll(() => Effect.succeed(false)))
+      }).pipe(Effect.catch(() => Effect.succeed(false)))
 
     const updateMoveStatus: PlanStorageService["updateMoveStatus"] = (
       path,

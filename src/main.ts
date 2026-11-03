@@ -14,9 +14,9 @@
  *   $ unraid-bin-pack apply
  */
 
-import { Command } from "@effect/cli"
-import { BunContext, BunRuntime } from "@effect/platform-bun"
-import { Effect, Option, Logger, LogLevel } from "effect"
+import { BunServices, BunRuntime } from "@effect/platform-bun"
+import { Effect, Option, References } from "effect"
+import { Command } from "effect/cli"
 
 import * as Opts from "./cli/options"
 import { runPlan, runApply, runShow, createAppLayer, withErrorHandling } from "./cli/handler"
@@ -75,7 +75,7 @@ const planCommand = Command.make(
         debug: opts.debug,
       }, isInteractive)
     ).pipe(
-      opts.debug ? Effect.provide(Logger.minimumLogLevel(LogLevel.Debug)) : (x => x),
+      opts.debug ? Effect.provideService(References.MinimumLogLevel, "Debug") : (x => x),
       Effect.provide(createAppLayer())
     )
   }
@@ -142,9 +142,8 @@ const rootCommand = Command.make("unraid-bin-pack", {}).pipe(
 // Run CLI
 // =============================================================================
 
-const cli = Command.run(rootCommand, {
-  name: "unraid-bin-pack",
-  version: "0.1.0",
-})
-
-cli(process.argv).pipe(Effect.provide(BunContext.layer), BunRuntime.runMain)
+rootCommand.pipe(
+  Command.run({ version: "0.1.0" }),
+  Effect.provide(BunServices.layer),
+  BunRuntime.runMain
+)

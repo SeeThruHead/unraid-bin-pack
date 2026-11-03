@@ -3,9 +3,9 @@
  * Run with: bun run src/test-platform.ts
  */
 
-import { BunContext, BunRuntime } from "@effect/platform-bun"
-import { FileSystem, Path, Command as ShellCommand } from "@effect/platform"
-import { Console, Duration, Effect, pipe } from "effect"
+import { BunServices, BunRuntime } from "@effect/platform-bun"
+import { Console, Duration, Effect, FileSystem, Path, pipe } from "effect"
+import { ChildProcess, ChildProcessSpawner } from "effect/process"
 
 // Test 1: Can we get the FileSystem service?
 const test1_getFileSystem = pipe(
@@ -56,16 +56,16 @@ const test7_listMethods = pipe(
 
 // Test 8: Can we run shell commands via Command service?
 const test8_shellCommand = pipe(
-  ShellCommand.make("echo", "hello from shell"),
-  ShellCommand.string,
+  ChildProcessSpawner.ChildProcessSpawner,
+  Effect.flatMap((spawner) => spawner.string(ChildProcess.make("echo", ["hello from shell"]))),
   Effect.map((s) => s.trim()),
   Effect.tap((result) => Console.log(`[ok] Test 8: Shell command output: ${result}`))
 )
 
 // Test 9: Can we run `df` to get disk stats?
 const test9_dfCommand = pipe(
-  ShellCommand.make("df", "-k", "."),
-  ShellCommand.string,
+  ChildProcessSpawner.ChildProcessSpawner,
+  Effect.flatMap((spawner) => spawner.string(ChildProcess.make("df", ["-k", "."]))),
   Effect.map((s) => s.trim().split("\n")),
   Effect.tap((lines) =>
     Console.log(`[ok] Test 9: df command works\n  Header: ${lines[0]}\n  Data:   ${lines[1]}`)
@@ -149,4 +149,4 @@ const main = pipe(
   Effect.andThen(Console.log("\n=== All tests passed! ==="))
 )
 
-pipe(main, Effect.provide(BunContext.layer), BunRuntime.runMain)
+pipe(main, Effect.provide(BunServices.layer), BunRuntime.runMain)

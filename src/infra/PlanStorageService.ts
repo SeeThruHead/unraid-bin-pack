@@ -178,10 +178,7 @@ export interface PlanStorageService {
   readonly defaultPath: string
 }
 
-export class PlanStorageServiceTag extends Context.Tag("PlanStorageService")<
-  PlanStorageServiceTag,
-  PlanStorageService
->() {}
+export class PlanStorageServiceTag extends Context.Service<PlanStorageServiceTag, PlanStorageService>()("PlanStorageService") {}
 
 // =============================================================================
 // Serialization

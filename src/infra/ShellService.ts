@@ -32,10 +32,7 @@ export interface ShellService {
   readonly exec: (command: string) => Effect.Effect<ShellResult, ShellError>
 }
 
-export class ShellServiceTag extends Context.Tag("ShellService")<
-  ShellServiceTag,
-  ShellService
->() {}
+export class ShellServiceTag extends Context.Service<ShellServiceTag, ShellService>()("ShellService") {}
 
 // =============================================================================
 // Live implementation (uses Bun.spawn)

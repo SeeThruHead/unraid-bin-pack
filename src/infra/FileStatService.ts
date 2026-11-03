@@ -5,8 +5,7 @@
  * All errors are caught and converted to typed errors.
  */
 
-import { Context, Data, Effect, Layer, pipe } from "effect"
-import { FileSystem } from "@effect/platform"
+import { Context, Data, Effect, FileSystem, Layer, Match, pipe, type PlatformError } from "effect"
 
 // =============================================================================
 // Typed errors - all possible failures from fs.stat
@@ -35,47 +34,18 @@ export interface FileStatService {
   readonly stat: (path: string) => Effect.Effect<{ size: number }, FileStatError>
 }
 
-export class FileStatServiceTag extends Context.Tag("FileStatService")<
-  FileStatServiceTag,
-  FileStatService
->() {}
+export class FileStatServiceTag extends Context.Service<FileStatServiceTag, FileStatService>()("FileStatService") {}
 
 // =============================================================================
 // Error detection from @effect/platform errors
 // =============================================================================
 
-interface PlatformError {
-  code?: string
-  message?: string
-  _tag?: string
-}
-
-const toFileStatError = (path: string, error: unknown): FileStatError => {
-  const platformError = error as PlatformError
-  const code = platformError?.code?.toUpperCase()
-
-  if (code === "ENOENT") {
-    return new FileNotFound({ path })
-  }
-
-  if (code === "EACCES" || code === "EPERM") {
-    return new FilePermissionDenied({ path })
-  }
-
-  // Fallback to message parsing
-  const message = String(platformError?.message ?? error).toLowerCase()
-
-  if (message.includes("enoent") || message.includes("no such file")) {
-    return new FileNotFound({ path })
-  }
-
-  if (message.includes("eacces") || message.includes("permission denied") || message.includes("eperm")) {
-    return new FilePermissionDenied({ path })
-  }
-
-  // Catchall
-  return new FileStatUnknownError({ path, cause: String(platformError?.message ?? error) })
-}
+const toFileStatError = (path: string, error: PlatformError.PlatformError): FileStatError =>
+  Match.value(error.reason._tag).pipe(
+    Match.when("NotFound", () => new FileNotFound({ path })),
+    Match.when("PermissionDenied", () => new FilePermissionDenied({ path })),
+    Match.orElse(() => new FileStatUnknownError({ path, cause: error.message }))
+  )
 
 // =============================================================================
 // Live implementation (uses @effect/platform FileSystem)

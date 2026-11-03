@@ -18,7 +18,7 @@
  */
 
 import { Effect, Layer } from "effect"
-import { FileSystem } from "@effect/platform"
+import { FileSystem } from "effect"
 
 import { DiskStatsServiceTag } from "../infra/DiskStatsService"
 import { FileStatServiceTag, FileNotFound, FilePermissionDenied } from "../infra/FileStatService"
