@@ -31,7 +31,7 @@ export type DiskStatsError = DiskStatsPermissionDenied | DiskStatsUnknownError
 // Service interface
 // =============================================================================
 
-export interface DiskStatsService {
+export type DiskStatsService = {
   readonly getStats: (path: string) => Effect.Effect<{ free: number; size: number }, DiskStatsError>
 }
 
@@ -41,7 +41,7 @@ export class DiskStatsServiceTag extends Context.Service<DiskStatsServiceTag, Di
 // Error detection from check-disk-space errors
 // =============================================================================
 
-interface CheckDiskError {
+type CheckDiskError = {
   code?: string
   message?: string
 }

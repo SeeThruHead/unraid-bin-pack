@@ -18,7 +18,7 @@ export class ShellError extends Data.TaggedError("ShellError")<{
 // Types
 // =============================================================================
 
-export interface ShellResult {
+export type ShellResult = {
   readonly stdout: string
   readonly stderr: string
   readonly exitCode: number
@@ -28,7 +28,7 @@ export interface ShellResult {
 // Service interface
 // =============================================================================
 
-export interface ShellService {
+export type ShellService = {
   readonly exec: (command: string) => Effect.Effect<ShellResult, ShellError>
 }
 
@@ -53,6 +53,6 @@ export const ShellServiceLive = Layer.succeed(ShellServiceTag, {
 
         return { stdout, stderr, exitCode }
       },
-      catch: (e) => new ShellError({ message: `Shell command failed: ${e}`, command }),
+      catch: (e) => new ShellError({ message: `Shell command failed: ${String(e)}`, command }),
     }),
 })

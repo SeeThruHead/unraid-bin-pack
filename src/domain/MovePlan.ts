@@ -10,7 +10,7 @@ import type { FileEntry } from "./FileEntry"
 
 export type MoveStatus = "pending" | "in_progress" | "completed" | "skipped" | "failed"
 
-export interface FileMove {
+export type FileMove = {
   readonly file: FileEntry
   readonly targetDiskPath: string
   readonly destinationPath: string
@@ -18,12 +18,12 @@ export interface FileMove {
   readonly reason?: string // For skipped/failed moves
 }
 
-export interface MovePlan {
+export type MovePlan = {
   readonly moves: readonly FileMove[]
   readonly summary: MoveSummary
 }
 
-export interface MoveSummary {
+export type MoveSummary = {
   readonly totalFiles: number
   readonly totalBytes: number
   readonly movesPerDisk: ReadonlyMap<string, number>

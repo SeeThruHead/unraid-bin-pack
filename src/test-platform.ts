@@ -50,7 +50,7 @@ const test6_pathJoin = pipe(
 // Test 7: What methods does FileSystem have?
 const test7_listMethods = pipe(
   FileSystem.FileSystem,
-  Effect.map((fs) => Object.keys(fs).sort()),
+  Effect.map((fs) => Object.keys(fs).toSorted()),
   Effect.tap((methods) => Console.log(`[ok] Test 7: FileSystem methods: ${methods.join(", ")}`))
 )
 
@@ -112,13 +112,13 @@ const test12_parallelStats = pipe(
   FileSystem.FileSystem,
   Effect.flatMap((fs) =>
     pipe(
-      Effect.all(
-        ["package.json", "tsconfig.json", "bun.lockb"].map((file) =>
+      Effect.forEach(
+        ["package.json", "tsconfig.json", "bun.lockb"],
+        (file) =>
           pipe(
             fs.stat(file),
             Effect.map((s) => ({ file, size: s.size }))
-          )
-        ),
+          ),
         { concurrency: "unbounded" }
       ),
       Effect.timed

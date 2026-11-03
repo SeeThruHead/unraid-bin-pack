@@ -32,8 +32,7 @@ export const interactivePlanPrompts = (
 
     // Source disk - show least full as default
     const leastFullDisk = discoveredDisks
-      .slice()
-      .sort((a, b) => b.freeBytes - a.freeBytes)[0]
+      .toSorted((a, b) => b.freeBytes - a.freeBytes)[0]
 
     const srcDefault = leastFullDisk?.path ?? ""
     const srcMessage = leastFullDisk

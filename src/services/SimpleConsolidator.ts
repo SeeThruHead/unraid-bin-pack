@@ -23,7 +23,7 @@ import type { WorldView, DiskState } from "../domain/WorldView"
 // Types
 // =============================================================================
 
-export interface ConsolidationOptions {
+export type ConsolidationOptions = {
   readonly minSpaceBytes: number
   readonly minFileSizeBytes?: number // Min file size to consider (default: 0, move all files)
   readonly pathPrefixes?: readonly string[] // Path prefixes to include (default: all paths)
@@ -31,15 +31,15 @@ export interface ConsolidationOptions {
   readonly srcDiskPaths?: readonly string[] // If specified, only move files from these disks
 }
 
-export interface ConsolidationResult {
+export type ConsolidationResult = {
   readonly moves: ReadonlyArray<FileMove>
   readonly bytesConsolidated: number
 }
 
-interface DiskWithUsage extends DiskState {
+type DiskWithUsage = {
   readonly usedBytes: number
   readonly usedPct: number
-}
+} & DiskState
 
 // =============================================================================
 // Main API
@@ -52,7 +52,7 @@ interface DiskWithUsage extends DiskState {
 export const consolidateSimple = (
   worldView: WorldView,
   options: ConsolidationOptions
-): Effect.Effect<ConsolidationResult, never> =>
+): Effect.Effect<ConsolidationResult> =>
   Effect.gen(function* () {
     const maxCombinationSize = options.maxCombinationSize ?? 5
     const minFileSizeBytes = options.minFileSizeBytes ?? 0
@@ -107,12 +107,13 @@ export const consolidateSimple = (
     rankedDisks = rankedDisks.filter((d) => d.path !== "/mnt/disks")
 
     // Filter to only specified source disks if provided
-    if (options.srcDiskPaths && options.srcDiskPaths.length > 0) {
+    const srcDiskPaths = options.srcDiskPaths ?? []
+    if (srcDiskPaths.length > 0) {
       rankedDisks = rankedDisks.filter((d) =>
-        options.srcDiskPaths!.includes(d.path)
+        srcDiskPaths.includes(d.path)
       )
       yield* Effect.logDebug(
-        `Filtered to ${rankedDisks.length} source disks: ${options.srcDiskPaths.join(", ")}`
+        `Filtered to ${rankedDisks.length} source disks: ${srcDiskPaths.join(", ")}`
       )
     }
 
@@ -172,7 +173,7 @@ export const consolidateSimple = (
           )
 
           // Log diagnostic info about why we stopped
-          const sortedRemaining = [...remainingFiles].sort((a, b) => a.sizeBytes - b.sizeBytes)
+          const sortedRemaining = remainingFiles.toSorted((a, b) => a.sizeBytes - b.sizeBytes)
           const smallestFile = sortedRemaining[0]
           if (smallestFile) {
             yield* Effect.logDebug(
@@ -183,7 +184,7 @@ export const consolidateSimple = (
           // Log available space on destinations
           const destinations = [...availableSpace.entries()]
             .filter(([diskPath]) => diskPath !== sourceDisk.path && !processedDisks.has(diskPath))
-            .sort((a, b) => b[1] - a[1]) // Sort by free space descending
+            .toSorted((a, b) => b[1] - a[1]) // Sort by free space descending
 
           yield* Effect.logDebug(
             `  Available destinations: ${destinations.length}`
@@ -243,7 +244,7 @@ export const consolidateSimple = (
     // Log final disk state
     yield* Effect.logDebug(`Final disk state:`)
     const finalDiskState = [...availableSpace.entries()]
-      .sort((a, b) => b[1] - a[1]) // Sort by free space descending
+      .toSorted((a, b) => b[1] - a[1]) // Sort by free space descending
 
     for (const [diskPath, freeSpace] of finalDiskState) {
       const diskName = diskPath.split('/').pop()
@@ -282,14 +283,14 @@ const rankDisksByFullness = (worldView: WorldView): ReadonlyArray<DiskWithUsage>
       // Only include disks with files on them
       return worldView.files.some((f) => f.diskPath === disk.path)
     }),
-    Array.sort(Order.mapInput(Order.Number, (d: DiskWithUsage) => d.usedPct)) // Ascending
+    Array.sortWith((d: DiskWithUsage) => d.usedPct, Order.Number) // Ascending
   )
 
 // =============================================================================
 // Combination Finding
 // =============================================================================
 
-interface CombinationCandidate {
+type CombinationCandidate = {
   readonly files: ReadonlyArray<FileEntry>
   readonly totalBytes: number
   readonly targetDisk: string
@@ -353,7 +354,7 @@ const findBestCombination = (
 /**
  * Bucket for grouping files by size range
  */
-interface FileBucket {
+type FileBucket = {
   readonly minSize: number
   readonly maxSize: number
   readonly files: FileEntry[]
@@ -441,7 +442,7 @@ const findBestCombinationForDisk = (
   const sampledFiles: FileEntry[] = []
   for (const bucket of buckets) {
     // Sample up to 3 files from each bucket (smallest, median, largest)
-    const sorted = [...bucket.files].sort((a, b) => a.sizeBytes - b.sizeBytes)
+    const sorted = bucket.files.toSorted((a, b) => a.sizeBytes - b.sizeBytes)
     const samples = [
       sorted[0],                                    // smallest
       sorted[Math.floor(sorted.length / 2)],        // median
@@ -503,11 +504,11 @@ const generateCombinations = <T>(
       return
     }
 
-    for (let i = start; i < array.length; i++) {
-      current.push(array[i]!)
-      helper(i + 1, current)
+    array.slice(start).forEach((item, offset) => {
+      current.push(item)
+      helper(start + offset + 1, current)
       current.pop()
-    }
+    })
   }
 
   helper(0, [])

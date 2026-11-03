@@ -51,20 +51,20 @@ export type TransferError =
 // Types
 // =============================================================================
 
-export interface TransferResult {
+export type TransferResult = {
   readonly move: FileMove
   readonly success: boolean
   readonly error?: string
 }
 
-export interface TransferReport {
+export type TransferReport = {
   readonly results: readonly TransferResult[]
   readonly successful: number
   readonly failed: number
   readonly skipped: number
 }
 
-export interface TransferOptions {
+export type TransferOptions = {
   readonly dryRun: boolean
   readonly concurrency: number
   readonly preserveAttrs: boolean
@@ -76,7 +76,7 @@ export interface TransferOptions {
 // Service interface
 // =============================================================================
 
-export interface TransferService {
+export type TransferService = {
   /** Execute all moves from a plan */
   readonly executeAll: (
     plan: MovePlan,
@@ -90,7 +90,7 @@ export class TransferServiceTag extends Context.Service<TransferServiceTag, Tran
 // Batch types
 // =============================================================================
 
-interface DiskBatch {
+type DiskBatch = {
   readonly sourceDisk: string
   readonly targetDisk: string
   readonly moves: readonly FileMove[]
@@ -170,7 +170,7 @@ export const RsyncTransferService = Layer.effect(
     const executeBatch = (
       batch: DiskBatch,
       options: TransferOptions
-    ): Effect.Effect<TransferResult[], never> => {
+    ): Effect.Effect<TransferResult[]> => {
       // Create temp file with relative paths
       const tempFile = `/tmp/rsync-files-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`
       const filesContent = batch.relativePaths.join("\n")
@@ -192,13 +192,8 @@ export const RsyncTransferService = Layer.effect(
 
           return shell.exec(command)
         }),
-        Effect.flatMap((result) => {
-          // Clean up temp file
-          return pipe(
-            shell.exec(`rm -f "${tempFile}"`),
-            Effect.map(() => result)
-          )
-        }),
+        // Clean up temp file
+        Effect.tap(() => shell.exec(`rm -f "${tempFile}"`)),
         Effect.map((result): TransferResult[] => {
           if (result.exitCode !== 0) {
             // Batch failed - mark all moves as failed

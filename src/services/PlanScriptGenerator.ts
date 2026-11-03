@@ -18,14 +18,14 @@ import type { DiskStat } from "../infra/PlanStorageService"
 // Types
 // =============================================================================
 
-export interface PlanScriptOptions {
+export type PlanScriptOptions = {
   readonly moves: readonly FileMove[]
   readonly sourceDisk: string
   readonly diskStats: Record<string, DiskStat>
   readonly concurrency: number
 }
 
-interface Batch {
+type Batch = {
   readonly sourceDisk: string
   readonly targetDisk: string
   readonly files: readonly string[] // relative paths

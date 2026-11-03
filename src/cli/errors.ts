@@ -9,7 +9,7 @@
  * 3. How to fix it
  */
 
-import { Match, PlatformError } from "effect"
+import { Data, Match, PlatformError } from "effect"
 
 // Import all domain error types for exhaustive matching
 import type {
@@ -82,15 +82,14 @@ type DomainError = DiskError | ScannerError | PlanStorageError | TransferError
 // AppError - formatted user-facing errors
 // =============================================================================
 
-export class AppError extends Error {
-  readonly _tag = "AppError"
-
-  constructor(
-    readonly title: string,
-    readonly detail: string,
-    readonly suggestion: string
-  ) {
-    super(`${title}: ${detail}`)
+export class AppError extends Data.TaggedError("AppError")<{
+  readonly title: string
+  readonly detail: string
+  readonly suggestion: string
+  readonly message: string
+}> {
+  constructor(title: string, detail: string, suggestion: string) {
+    super({ title, detail, suggestion, message: `${title}: ${detail}` })
   }
 
   format(): string {

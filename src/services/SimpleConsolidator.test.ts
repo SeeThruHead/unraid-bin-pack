@@ -70,7 +70,7 @@ describe("SimpleConsolidator", () => {
 
     // Should process disk2 first (least full), then disk3
     expect(result.moves.length).toBe(2)
-    expect(result.moves[0]!.file.diskPath).toBe("/mnt/disk2")
+    expect(result.moves[0]?.file.diskPath).toBe("/mnt/disk2")
   })
 
   test("should respect minSpaceBytes reservation", async () => {
@@ -150,7 +150,7 @@ describe("SimpleConsolidator", () => {
 
     // Should move to disk2, not keep on disk1 even though disk1 has more space
     expect(result.moves.length).toBe(1)
-    expect(result.moves[0]!.targetDiskPath).toBe("/mnt/disk2")
+    expect(result.moves[0]?.targetDiskPath).toBe("/mnt/disk2")
   })
 
   test("should find multi-file combination across iterations", async () => {

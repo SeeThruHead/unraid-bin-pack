@@ -30,7 +30,7 @@ export type FileStatError = FileNotFound | FilePermissionDenied | FileStatUnknow
 // Service interface
 // =============================================================================
 
-export interface FileStatService {
+export type FileStatService = {
   readonly stat: (path: string) => Effect.Effect<{ size: number }, FileStatError>
 }
 
@@ -59,8 +59,10 @@ export const FileStatServiceLive = Layer.effect(
       stat: (path: string) =>
         pipe(
           fs.stat(path),
-          Effect.map((s) => ({ size: Number(s.size) })),
-          Effect.mapError((e) => toFileStatError(path, e))
+          Effect.mapBoth({
+            onSuccess: (s) => ({ size: Number(s.size) }),
+            onFailure: (e) => toFileStatError(path, e),
+          })
         ),
     }))
   )

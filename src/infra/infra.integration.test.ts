@@ -46,7 +46,7 @@ afterAll(async () => {
 // =============================================================================
 
 describe("GlobService (real IO)", () => {
-  const service = pipe(GlobServiceLive)
+  const service = GlobServiceLive
 
   test("scan finds files in directory", async () => {
     const result = await pipe(
@@ -388,7 +388,7 @@ describe("PlanStorageService (real IO)", () => {
 // =============================================================================
 
 describe("GlobService typed errors with real IO", () => {
-  const service = pipe(GlobServiceLive)
+  const service = GlobServiceLive
 
   test("real Bun.Glob ENOENT produces GlobNotFound error", async () => {
     const result = await pipe(

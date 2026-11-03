@@ -3,9 +3,13 @@
  * Supports 2 levels deep with arrow key navigation
  */
 
-import { Effect } from "effect"
+import { Data, Effect } from "effect"
 
-interface TreeNode {
+export class TreeSelectError extends Data.TaggedError("TreeSelectError")<{
+  readonly message: string
+}> {}
+
+type TreeNode = {
   path: string
   name: string
   children?: TreeNode[]
@@ -14,7 +18,7 @@ interface TreeNode {
   level: number
 }
 
-interface TreeSelectState {
+type TreeSelectState = {
   nodes: TreeNode[]
   flatView: TreeNode[]
   cursor: number
@@ -80,7 +84,7 @@ async function scanDirectories(basePaths: string[]): Promise<TreeNode[]> {
             }
           }
 
-          node.children = Array.from(childrenMap.values()).sort((a, b) =>
+          node.children = Array.from(childrenMap.values()).toSorted((a, b) =>
             a.name.localeCompare(b.name)
           )
 
@@ -96,7 +100,7 @@ async function scanDirectories(basePaths: string[]): Promise<TreeNode[]> {
     }
   }
 
-  return Array.from(nodeMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+  return Array.from(nodeMap.values()).toSorted((a, b) => a.name.localeCompare(b.name))
 }
 
 /**
@@ -150,21 +154,15 @@ function renderTree(state: TreeSelectState): string {
 /**
  * Run interactive tree selection
  */
-export async function selectDirectories(diskPaths: string[]): Promise<string[]> {
-  // Scan directories
-  const nodes = await scanDirectories(diskPaths)
+const runTreeSelect = (nodes: TreeNode[]): Effect.Effect<string[]> =>
+  Effect.callback<string[]>((resume) => {
+    const resolve = (selected: string[]) => resume(Effect.succeed(selected))
+    const state: TreeSelectState = {
+      nodes,
+      flatView: flattenTree(nodes),
+      cursor: 0,
+    }
 
-  if (nodes.length === 0) {
-    return []
-  }
-
-  const state: TreeSelectState = {
-    nodes,
-    flatView: flattenTree(nodes),
-    cursor: 0,
-  }
-
-  return new Promise((resolve) => {
     // Clear screen and hide cursor
     process.stdout.write("\x1b[2J\x1b[0f\x1b[?25l")
 
@@ -284,7 +282,6 @@ export async function selectDirectories(diskPaths: string[]): Promise<string[]> 
 
     process.stdin.on("data", onData)
   })
-}
 
 /**
  * Collect all selected paths from tree
@@ -308,13 +305,15 @@ function collectSelected(nodes: TreeNode[]): string[] {
   return selected
 }
 
-/**
- * Effect wrapper for tree selection
- */
-export const selectDirectoriesEffect = (
-  diskPaths: string[]
-): Effect.Effect<string[], Error> =>
-  Effect.tryPromise({
-    try: () => selectDirectories(diskPaths),
-    catch: (error) => new Error(`Failed to select directories: ${error}`),
+export const selectDirectoriesEffect = Effect.fnUntraced(function* (diskPaths: string[]) {
+  const nodes = yield* Effect.tryPromise({
+    try: () => scanDirectories(diskPaths),
+    catch: (error) => new TreeSelectError({ message: `Failed to select directories: ${String(error)}` }),
   })
+
+  if (nodes.length === 0) {
+    return []
+  }
+
+  return yield* runTreeSelect(nodes)
+})

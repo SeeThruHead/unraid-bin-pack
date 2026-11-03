@@ -175,7 +175,7 @@ export const force = Flag.Boolean("force").pipe(
 // Types
 // =============================================================================
 
-export interface PlanOptions {
+export type PlanOptions = {
   readonly src: string | undefined         // auto-select least full if undefined
   readonly dest: string | undefined        // auto-discover if undefined
   readonly minSpace: string | undefined    // parsed with parseSize()
@@ -190,7 +190,7 @@ export interface PlanOptions {
   readonly debug?: boolean                 // enable debug-level logging (optional)
 }
 
-export interface ApplyOptions {
+export type ApplyOptions = {
   readonly planFile: string | undefined
   readonly concurrency: number
   readonly dryRun: boolean

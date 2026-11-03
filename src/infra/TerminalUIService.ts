@@ -8,7 +8,7 @@
  * - Testable via DI (can stub for tests)
  */
 
-import { Context, Effect, Layer } from "effect"
+import { Console, Context, Effect, Layer } from "effect"
 
 // =============================================================================
 // ANSI codes
@@ -38,7 +38,7 @@ const ANSI = {
 // Types
 // =============================================================================
 
-export interface DiskProgress {
+export type DiskProgress = {
   diskPath: string
   bytesTransferred: number
   totalBytes: number
@@ -48,7 +48,7 @@ export interface DiskProgress {
   error?: string
 }
 
-export interface OverallProgress {
+export type OverallProgress = {
   disks: DiskProgress[]
   startedAt: number
 }
@@ -92,7 +92,7 @@ const progressBar = (pct: number, width: number = 20): string => {
 // Service interface
 // =============================================================================
 
-export interface TerminalUIService {
+export type TerminalUIService = {
   /** Print a single line (with newline) */
   readonly print: (msg: string) => Effect.Effect<void>
 
@@ -100,7 +100,7 @@ export interface TerminalUIService {
   readonly write: (msg: string) => Effect.Effect<void>
 
   /** Clear screen and reset cursor */
-  readonly clear: () => Effect.Effect<void>
+  readonly clear: Effect.Effect<void>
 
   /** Start multi-line progress display (hides cursor) */
   readonly startProgress: (diskCount: number) => Effect.Effect<void>
@@ -109,7 +109,7 @@ export interface TerminalUIService {
   readonly updateProgress: (progress: OverallProgress) => Effect.Effect<void>
 
   /** End multi-line progress display (shows cursor) */
-  readonly endProgress: () => Effect.Effect<void>
+  readonly endProgress: Effect.Effect<void>
 
   /** Format a disk progress line */
   readonly formatDiskLine: (disk: DiskProgress) => string
@@ -125,11 +125,11 @@ export class TerminalUIServiceTag extends Context.Service<TerminalUIServiceTag, 
 // =============================================================================
 
 export const TerminalUIServiceLive = Layer.succeed(TerminalUIServiceTag, {
-  print: (msg) => Effect.sync(() => console.log(msg)),
+  print: (msg) => Console.log(msg),
 
   write: (msg) => Effect.sync(() => process.stdout.write(msg)),
 
-  clear: () => Effect.sync(() => console.clear()),
+  clear: Console.clear,
 
   startProgress: (diskCount) =>
     Effect.sync(() => {
@@ -139,28 +139,30 @@ export const TerminalUIServiceLive = Layer.succeed(TerminalUIServiceTag, {
     }),
 
   updateProgress: (progress) =>
-    Effect.sync(() => {
+    Effect.gen(function* () {
       const lines = progress.disks.length + 2 // disks + blank + summary
+      const clearLine = Effect.sync(() => process.stdout.write(ANSI.clearLine))
 
       // Move cursor up to start of progress area
-      process.stdout.write(ANSI.up(lines))
+      yield* Effect.sync(() => process.stdout.write(ANSI.up(lines)))
 
       // Render each disk line
-      progress.disks.forEach((disk) => {
-        process.stdout.write(ANSI.clearLine)
-        console.log(formatDiskProgressLine(disk))
-      })
+      yield* Effect.forEach(
+        progress.disks,
+        (disk) => Effect.andThen(clearLine, Console.log(formatDiskProgressLine(disk))),
+        { discard: true }
+      )
 
       // Blank line
-      process.stdout.write(ANSI.clearLine)
-      console.log("")
+      yield* clearLine
+      yield* Console.log("")
 
       // Summary line
-      process.stdout.write(ANSI.clearLine)
-      console.log(formatSummaryLine(progress))
+      yield* clearLine
+      yield* Console.log(formatSummaryLine(progress))
     }),
 
-  endProgress: () =>
+  endProgress:
     Effect.sync(() => {
       process.stdout.write(ANSI.showCursor)
     }),
@@ -214,10 +216,10 @@ function formatSummaryLine(progress: OverallProgress): string {
 export const TerminalUIServiceStub = Layer.succeed(TerminalUIServiceTag, {
   print: (_msg) => Effect.void,
   write: (_msg) => Effect.void,
-  clear: () => Effect.void,
+  clear: Effect.void,
   startProgress: (_n) => Effect.void,
   updateProgress: (_p) => Effect.void,
-  endProgress: () => Effect.void,
+  endProgress: Effect.void,
   formatDiskLine: () => "",
   formatSummary: () => "",
 })

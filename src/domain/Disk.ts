@@ -2,7 +2,7 @@
  * Domain types for disk operations.
  */
 
-export interface Disk {
+export type Disk = {
   readonly path: string
   readonly totalBytes: number
   readonly freeBytes: number

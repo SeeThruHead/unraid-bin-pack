@@ -59,7 +59,7 @@ const fromFileStatError = (path: string) =>
 // Service interface
 // =============================================================================
 
-export interface ScannerService {
+export type ScannerService = {
   /** Scan a single disk for all files */
   readonly scanDisk: (
     diskPath: string,
@@ -92,13 +92,15 @@ export const ScannerServiceLive = Layer.effect(
       const absolutePath = `${diskPath}/${relativePath}`
       return pipe(
         fileStat.stat(absolutePath),
-        Effect.map((stat) => ({
-          absolutePath,
-          relativePath,
-          sizeBytes: stat.size,
-          diskPath,
-        })),
-        Effect.mapError(fromFileStatError(absolutePath))
+        Effect.mapBoth({
+          onSuccess: (stat) => ({
+            absolutePath,
+            relativePath,
+            sizeBytes: stat.size,
+            diskPath,
+          }),
+          onFailure: fromFileStatError(absolutePath),
+        })
       )
     }
 
@@ -106,14 +108,16 @@ export const ScannerServiceLive = Layer.effect(
       pipe(
         // Get all file paths via glob
         glob.scan("**/*", diskPath, { onlyFiles: true }),
-        Effect.mapError(fromGlobError),
-        // Filter out excluded patterns
-        Effect.map((paths) => {
-          const excludePatterns = options.excludePatterns
-          if (!excludePatterns?.length) return paths
-          return paths.filter((p) =>
-            !excludePatterns.some((pattern) => p.includes(pattern))
-          )
+        Effect.mapBoth({
+          onFailure: fromGlobError,
+          // Filter out excluded patterns
+          onSuccess: (paths) => {
+            const excludePatterns = options.excludePatterns
+            if (!excludePatterns?.length) return paths
+            return paths.filter((p) =>
+              !excludePatterns.some((pattern) => p.includes(pattern))
+            )
+          },
         }),
         // MAP: stat each file in parallel
         Effect.flatMap((relativePaths) =>

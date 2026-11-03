@@ -4,13 +4,13 @@
 
 import type { FileEntry } from "./FileEntry"
 
-export interface DiskState {
+export type DiskState = {
   readonly path: string
   readonly totalBytes: number
   readonly freeBytes: number
 }
 
-export interface WorldView {
+export type WorldView = {
   readonly disks: ReadonlyArray<DiskState>
   readonly files: ReadonlyArray<FileEntry>
 }

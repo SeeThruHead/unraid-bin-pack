@@ -30,7 +30,7 @@ export type GlobError = GlobNotFound | GlobPermissionDenied | GlobUnknownError
 // Service interface
 // =============================================================================
 
-export interface GlobService {
+export type GlobService = {
   readonly scan: (
     pattern: string,
     cwd: string,
@@ -44,7 +44,7 @@ export class GlobServiceTag extends Context.Service<GlobServiceTag, GlobService>
 // Error detection from Bun.Glob errors
 // =============================================================================
 
-interface BunError {
+type BunError = {
   code?: string
   message?: string
 }

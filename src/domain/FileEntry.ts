@@ -2,7 +2,7 @@
  * Domain type for a file discovered during scanning.
  */
 
-export interface FileEntry {
+export type FileEntry = {
   /** Full absolute path to the file */
   readonly absolutePath: string
   /** Path relative to the disk root (for destination calculation) */

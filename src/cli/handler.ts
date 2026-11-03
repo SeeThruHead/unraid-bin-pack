@@ -2,13 +2,13 @@
  * CLI handlers - orchestrate services for plan and apply commands.
  */
 
-import { Effect, Result, pipe, Layer, References } from "effect"
+import { Effect, Result, pipe, Layer } from "effect"
 import { Console } from "effect"
 import { BunServices } from "@effect/platform-bun"
 import { FileSystem } from "effect"
 
 import type { PlanOptions, ApplyOptions } from "./options"
-import { parseSize, formatSize } from "../lib/parseSize"
+import { parseSize } from "../lib/parseSize"
 import { createMovePlan, type FileMove } from "../domain/MovePlan"
 import type { WorldView } from "../domain/WorldView"
 import type { Disk } from "../domain/Disk"
@@ -119,13 +119,13 @@ const buildWorldViewAndPlan = (
     const scannerService = yield* ScannerServiceTag
 
     // Scan all disks to get all files
-    const allFiles = yield* Effect.flatMap(
+    const allFiles = yield* Effect.map(
       Effect.forEach(allDisks, (disk) =>
         scannerService.scanDisk(disk.path, {
           excludePatterns: options.excludePatterns,
         })
       ),
-      (fileArrays) => Effect.succeed(fileArrays.flat())
+      (fileArrays) => fileArrays.flat()
     )
 
     // Debug: log file scan results
@@ -214,8 +214,8 @@ const buildWorldViewAndPlan = (
  * Wrap an effect with user-friendly error handling.
  * Converts all domain errors to AppErrors with actionable messages.
  */
-export const withErrorHandling = <A, R>(
-  effect: Effect.Effect<A, unknown, R>
+export const withErrorHandling = <A, E, R>(
+  effect: Effect.Effect<A, E, R>
 ): Effect.Effect<void, never, R> =>
   pipe(
     effect,
@@ -229,6 +229,11 @@ export const withErrorHandling = <A, R>(
 // =============================================================================
 // Shared display functions
 // =============================================================================
+
+const getSourceDisk = (sourcePath: string) => {
+  const match = sourcePath.match(/^(\/mnt\/disk\d+)/)
+  return match?.[1] ?? sourcePath.split("/").slice(0, 3).join("/")
+}
 
 /**
  * Display detailed plan summary with disk stats and move list.
@@ -244,12 +249,6 @@ const displayPlanDetails = (
 
     // Get moves by status
     const allMoves = Object.entries(savedPlan.moves)
-
-    // Extract source/target disks from moves
-    const getSourceDisk = (sourcePath: string) => {
-      const match = sourcePath.match(/^(\/mnt\/disk\d+)/)
-      return match?.[1] ?? sourcePath.split("/").slice(0, 3).join("/")
-    }
 
     // Collect all unique disks (both source and destination)
     const allDiskPaths = new Set<string>()
@@ -280,7 +279,7 @@ const displayPlanDetails = (
     yield* logger.show.diskStatsHeader
 
     // Show ALL disks with before/after states, sorted by path
-    const sortedDiskPaths = [...allDiskPaths].sort()
+    const sortedDiskPaths = [...allDiskPaths].toSorted()
     yield* Effect.forEach(
       sortedDiskPaths,
       (diskPath) =>
@@ -314,10 +313,7 @@ const displayPlanDetails = (
     // Group moves by SOURCE disk for display
     const movesBySourceDisk = (allMoves as Array<[string, typeof savedPlan.moves[string]]>).reduce((acc, [sourcePath, move]) => {
       const sourceDisk = getSourceDisk(sourcePath)
-      if (!acc.has(sourceDisk)) {
-        acc.set(sourceDisk, [])
-      }
-      acc.get(sourceDisk)!.push({ sourcePath, move })
+      acc.set(sourceDisk, [...(acc.get(sourceDisk) ?? []), { sourcePath, move }])
       return acc
     }, new Map<string, Array<{ sourcePath: string; move: typeof savedPlan.moves[string] }>>())
 
@@ -355,7 +351,6 @@ const displayPlanDetails = (
 export const runPlan = (options: PlanOptions, isInteractive: boolean = false) =>
   Effect.gen(function* () {
     const diskService = yield* DiskServiceTag
-    const scannerService = yield* ScannerServiceTag
     const planStorage = yield* PlanStorageServiceTag
     const transferService = yield* TransferServiceTag
     const logger = yield* LoggerServiceTag
@@ -363,7 +358,7 @@ export const runPlan = (options: PlanOptions, isInteractive: boolean = false) =>
     // Interactive mode: discover disks first, then prompt for options
     let finalOptions = options
     if (isInteractive) {
-      const discoveredDisks = yield* diskService.autoDiscover().pipe(
+      const discoveredDisks = yield* diskService.autoDiscover.pipe(
         Effect.flatMap(paths => diskService.discover(paths))
       )
 
@@ -381,7 +376,6 @@ export const runPlan = (options: PlanOptions, isInteractive: boolean = false) =>
     }
 
     const excludePatterns = finalOptions.exclude?.split(",").map((s) => s.trim()) ?? []
-    const _includePatterns = finalOptions.include?.split(",").map((s) => s.trim()) ?? []
     const planPath = finalOptions.planFile ?? planStorage.defaultPath
 
     // Check for existing partial plan (conflict detection)
@@ -433,7 +427,7 @@ export const runPlan = (options: PlanOptions, isInteractive: boolean = false) =>
 
     const diskPaths = finalOptions.dest
       ? finalOptions.dest.split(",").map((s) => s.trim())
-      : yield* diskService.autoDiscover()
+      : yield* diskService.autoDiscover
 
     if (diskPaths.length === 0) {
       yield* logger.plan.noDisksFound
@@ -520,7 +514,7 @@ export const runPlan = (options: PlanOptions, isInteractive: boolean = false) =>
     if (finalOptions.force && planExists) {
       yield* pipe(
         planStorage.delete(planPath),
-        Effect.catch(() => Effect.void)
+        Effect.ignore
       )
     }
 
@@ -578,8 +572,8 @@ export const runApply = (options: ApplyOptions) =>
     // Check if plan script exists
     const scriptExists = yield* pipe(
       fs.access(scriptPath),
-      Effect.map(() => true),
-      Effect.catch(() => Effect.succeed(false))
+      Effect.as(true),
+      Effect.orElseSucceed(() => false)
     )
 
     if (!scriptExists) {
@@ -600,7 +594,7 @@ export const runApply = (options: ApplyOptions) =>
     }
 
     // Execute the script
-    const result = yield* Effect.promise(() => Bun.$`bash ${scriptPath}`.quiet())
+    yield* Effect.promise(() => Bun.$`bash ${scriptPath}`.quiet())
 
     yield* Console.log(`\n✅ Plan execution complete!\n`)
   })
@@ -613,7 +607,6 @@ export const runShow = (options: { planFile: string | undefined }) =>
   Effect.gen(function* () {
     const logger = yield* LoggerServiceTag
     const planStorage = yield* PlanStorageServiceTag
-    const diskService = yield* DiskServiceTag
 
     const planPath = options.planFile ?? planStorage.defaultPath
 
@@ -632,9 +625,9 @@ export const runShow = (options: { planFile: string | undefined }) =>
 
     // Get moves by status
     const allMoves = Object.entries(savedPlan.moves)
-    const pendingMoves = allMoves.filter(([_, m]) => m.status === "pending")
-    const completedMoves = allMoves.filter(([_, m]) => m.status === "completed")
-    const failedMoves = allMoves.filter(([_, m]) => m.status === "failed")
+    const pendingMoves = allMoves.filter(([, m]) => m.status === "pending")
+    const completedMoves = allMoves.filter(([, m]) => m.status === "completed")
+    const failedMoves = allMoves.filter(([, m]) => m.status === "failed")
 
     yield* logger.show.planInfo({
       createdAt: savedPlan.createdAt,
@@ -653,22 +646,15 @@ export const runShow = (options: { planFile: string | undefined }) =>
 // Full live layer
 // =============================================================================
 
-export const createAppLayer = () => {
-  return pipe(
-    Layer.mergeAll(
-      LoggerServiceLive,
-      DiskServiceFullLive,
-      pipe(
-        ScannerServiceLive,
-        Layer.provide(GlobServiceLive),
-        Layer.provide(FileStatServiceLive),
-        Layer.provide(BunServices.layer)
-      ),
-      pipe(RsyncTransferService, Layer.provide(ShellServiceLive)),
-      SqlitePlanStorageService
-    )
-  )
-}
-
-// Default layer for backwards compatibility
-export const AppLive = createAppLayer()
+export const AppLive = Layer.mergeAll(
+  LoggerServiceLive,
+  DiskServiceFullLive,
+  pipe(
+    ScannerServiceLive,
+    Layer.provide(GlobServiceLive),
+    Layer.provide(FileStatServiceLive),
+    Layer.provide(BunServices.layer)
+  ),
+  pipe(RsyncTransferService, Layer.provide(ShellServiceLive)),
+  SqlitePlanStorageService
+)

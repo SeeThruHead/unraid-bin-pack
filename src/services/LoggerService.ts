@@ -10,7 +10,7 @@ import { formatSize } from "../lib/parseSize"
 // Service interface
 // =============================================================================
 
-export interface LoggerService {
+export type LoggerService = {
   readonly plan: {
     readonly header: Effect.Effect<void>
     readonly discoveringDisks: Effect.Effect<void>
@@ -121,8 +121,8 @@ export const LoggerServiceLive = Layer.succeed(
         }),
       noMovesRemaining: Console.log("\n✓ No moves remaining to execute\n"),
       validatingPlan: Console.log("\n🔍 Validating plan..."),
-      allSourceFilesExist: (count?) => Console.log(`✓ All source files exist${count ? ` (${count})` : ""}`),
-      missingSourceFiles: (files, count?) =>
+      allSourceFilesExist: (count) => Console.log(`✓ All source files exist${count ? ` (${count})` : ""}`),
+      missingSourceFiles: (files) =>
         Effect.gen(function* () {
           yield* Console.error(`\n❌ Missing source files (${files.length}):`)
           for (const file of files.slice(0, 10)) {
@@ -134,7 +134,7 @@ export const LoggerServiceLive = Layer.succeed(
           yield* Console.error("")
         }),
       noConflicts: Console.log("✓ No file conflicts detected"),
-      conflicts: (conflicts, count?) =>
+      conflicts: (conflicts) =>
         Effect.gen(function* () {
           yield* Console.error(`\n❌ File conflicts detected (${conflicts.length}):`)
           for (const file of conflicts.slice(0, 10)) {

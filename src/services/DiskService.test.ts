@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { Effect, Layer, pipe } from "effect"
-import { FileSystem } from "effect"
+import { ByteSize, Effect, FileSystem, Layer, Option, pipe } from "effect"
 import { BunServices } from "@effect/platform-bun"
 import { DiskServiceTag, DiskServiceLive, DiskServiceFullLive } from "./DiskService"
 import { DiskStatsServiceTag } from "../infra/DiskStatsService"
@@ -17,59 +16,33 @@ const StubDiskStatsService = Layer.succeed(DiskStatsServiceTag, {
     }),
 })
 
+const directoryInfo = (dev: bigint): FileSystem.File.Info => ({
+  type: "Directory",
+  mtime: Option.none(),
+  atime: Option.none(),
+  birthtime: Option.none(),
+  dev,
+  ino: Option.none(),
+  mode: 0o755,
+  nlink: Option.none(),
+  uid: Option.none(),
+  gid: Option.none(),
+  rdev: Option.none(),
+  size: ByteSize.bytes(0),
+  blksize: Option.none(),
+  blocks: Option.none(),
+})
+
+const deviceOf = (path: string): bigint => {
+  if (path === "/") return 0n
+  return path.startsWith("/mnt/") ? 1n : 2n
+}
+
 // Mock FileSystem that says all paths exist and are mount points
-const StubFileSystem = Layer.succeed(FileSystem.FileSystem, {
+const StubFileSystem = FileSystem.layerNoop({
   exists: () => Effect.succeed(true),
-  stat: (path: string) =>
-    Effect.succeed({
-      type: "Directory" as const,
-      // Use different device IDs for different paths to simulate mount points
-      dev: path === "/" ? 0 : path.startsWith("/mnt/") ? 1 : 2,
-      size: BigInt(0),
-      mtime: new Date(),
-      atime: new Date(),
-      ino: 0,
-      mode: 0o755,
-      nlink: 1,
-      uid: 0,
-      gid: 0,
-      rdev: 0,
-      blksize: 4096,
-      blocks: 0,
-      birthtimeMs: Date.now(),
-      ctimeMs: Date.now(),
-      mtimeMs: Date.now(),
-      atimeMs: Date.now(),
-    }),
-  // Unused methods
-  access: () => Effect.succeed(undefined),
-  copy: () => Effect.succeed(undefined),
-  copyFile: () => Effect.succeed(undefined),
-  chmod: () => Effect.succeed(undefined),
-  chown: () => Effect.succeed(undefined),
-  link: () => Effect.succeed(undefined),
-  makeDirectory: () => Effect.succeed(undefined),
-  makeTempDirectory: () => Effect.succeed("/tmp"),
-  makeTempDirectoryScoped: () => Effect.succeed("/tmp"),
-  makeTempFile: () => Effect.succeed("/tmp/file"),
-  makeTempFileScoped: () => Effect.succeed("/tmp/file"),
-  open: () => Effect.fail(new Error("Not implemented")),
-  readDirectory: () => Effect.succeed([]),
-  readFile: () => Effect.succeed(new Uint8Array()),
-  readFileString: () => Effect.succeed(""),
-  readLink: () => Effect.succeed(""),
-  realPath: (p: string) => Effect.succeed(p),
-  remove: () => Effect.succeed(undefined),
-  rename: () => Effect.succeed(undefined),
-  sink: () => { throw new Error("Not implemented") },
-  stream: () => { throw new Error("Not implemented") },
-  symlink: () => Effect.succeed(undefined),
-  truncate: () => Effect.succeed(undefined),
-  utimes: () => Effect.succeed(undefined),
-  watch: () => { throw new Error("Not implemented") },
-  writeFile: () => Effect.succeed(undefined),
-  writeFileString: () => Effect.succeed(undefined),
-} as unknown as FileSystem.FileSystem)
+  stat: (path) => Effect.succeed(directoryInfo(deviceOf(path))),
+})
 
 const TestDiskService = pipe(
   DiskServiceLive,
@@ -105,10 +78,9 @@ describe("DiskService (unit tests with stub)", () => {
   })
 
   test("fails when path does not exist", async () => {
-    const NonExistentFs = Layer.succeed(FileSystem.FileSystem, {
-      ...({} as FileSystem.FileSystem),
+    const NonExistentFs = FileSystem.layerNoop({
       exists: () => Effect.succeed(false),
-    } as unknown as FileSystem.FileSystem)
+    })
 
     const TestLayer = pipe(
       DiskServiceLive,

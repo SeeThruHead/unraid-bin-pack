@@ -19,7 +19,7 @@ import { Effect, Option, References } from "effect"
 import { Command } from "effect/cli"
 
 import * as Opts from "./cli/options"
-import { runPlan, runApply, runShow, createAppLayer, withErrorHandling } from "./cli/handler"
+import { runPlan, runApply, runShow, AppLive, withErrorHandling } from "./cli/handler"
 
 // =============================================================================
 // Plan subcommand
@@ -76,7 +76,7 @@ const planCommand = Command.make(
       }, isInteractive)
     ).pipe(
       opts.debug ? Effect.provideService(References.MinimumLogLevel, "Debug") : (x => x),
-      Effect.provide(createAppLayer())
+      Effect.provide(AppLive)
     )
   }
 ).pipe(
@@ -103,7 +103,7 @@ const applyCommand = Command.make(
         concurrency: opts.concurrency,
         dryRun: opts.dryRun,
       })
-    ).pipe(Effect.provide(createAppLayer()))
+    ).pipe(Effect.provide(AppLive))
 ).pipe(
   Command.withDescription("Execute the saved move plan")
 )
@@ -122,7 +122,7 @@ const showCommand = Command.make(
       runShow({
         planFile: Option.getOrUndefined(opts.planFile),
       })
-    ).pipe(Effect.provide(createAppLayer()))
+    ).pipe(Effect.provide(AppLive))
 ).pipe(
   Command.withDescription("Display the saved move plan")
 )

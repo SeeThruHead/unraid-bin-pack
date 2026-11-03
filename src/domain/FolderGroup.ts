@@ -15,7 +15,7 @@ import type { FileEntry } from "./FileEntry"
 // Types
 // =============================================================================
 
-export interface FolderGroup {
+export type FolderGroup = {
   /** The immediate parent folder path (relative to disk root) */
   readonly folderPath: string
   /** All files in this folder */
@@ -28,7 +28,7 @@ export interface FolderGroup {
   readonly keepTogether: boolean
 }
 
-export interface FolderGroupOptions {
+export type FolderGroupOptions = {
   /** Folders smaller than this are never split (default: 1GB) */
   readonly minSplitSizeBytes: number
   /** If largest file is >= this % of total, keep folder together (default: 0.9) */
@@ -119,4 +119,4 @@ export const groupByTopLevelFolder = (files: readonly FileEntry[]): FolderGroup[
  * Sort folders by total size descending (for best-fit packing).
  */
 export const sortBySize = (folders: readonly FolderGroup[]): FolderGroup[] =>
-  [...folders].sort((a, b) => b.totalBytes - a.totalBytes)
+  folders.toSorted((a, b) => b.totalBytes - a.totalBytes)

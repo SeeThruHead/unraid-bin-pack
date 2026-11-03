@@ -45,10 +45,10 @@ export type DiskError =
 // Service interface
 // =============================================================================
 
-export interface DiskService {
+export type DiskService = {
   readonly getStats: (path: string) => Effect.Effect<Disk, DiskError>
   readonly discover: (paths: string[]) => Effect.Effect<Disk[], DiskError>
-  readonly autoDiscover: () => Effect.Effect<string[], DiskError>
+  readonly autoDiscover: Effect.Effect<string[], DiskError>
 }
 
 export class DiskServiceTag extends Context.Service<DiskServiceTag, DiskService>()("DiskService") {}
@@ -57,7 +57,7 @@ export class DiskServiceTag extends Context.Service<DiskServiceTag, DiskService>
 // Helpers
 // =============================================================================
 
-interface IOError {
+type IOError = {
   code?: string
   message?: string
 }
@@ -118,13 +118,13 @@ export const DiskServiceLive = Layer.effect(
           // Check path exists
           const exists = yield* fs.exists(path)
           if (!exists) {
-            return yield* Effect.fail(new DiskNotFound({ path }))
+            return yield* new DiskNotFound({ path })
           }
 
           // Check it's a directory
           const stat = yield* fs.stat(path)
           if (stat.type !== "Directory") {
-            return yield* Effect.fail(new DiskNotADirectory({ path }))
+            return yield* new DiskNotADirectory({ path })
           }
 
           // Root "/" is always a valid mount point
@@ -137,7 +137,7 @@ export const DiskServiceLive = Layer.effect(
           const parentStat = yield* fs.stat(parentPath)
 
           if (stat.dev === parentStat.dev) {
-            return yield* Effect.fail(new DiskNotAMountPoint({ path }))
+            return yield* new DiskNotAMountPoint({ path })
           }
         }),
         Effect.mapError((e) => (e._tag === "PlatformError" ? fromPlatformError(path, e) : e))
@@ -152,13 +152,14 @@ export const DiskServiceLive = Layer.effect(
         Effect.flatMap(() =>
           pipe(
             statsService.getStats(path),
-            Effect.map(({ free, size }) => ({
-              path,
-              totalBytes: size,
-              freeBytes: free,
-            })),
-            // Transform DiskStatsService errors
-            Effect.catch((e) => Effect.fail(toDiskError(path, e)))
+            Effect.mapBoth({
+              onSuccess: ({ free, size }) => ({
+                path,
+                totalBytes: size,
+                freeBytes: free,
+              }),
+              onFailure: (e) => toDiskError(path, e),
+            })
           )
         )
       )
@@ -167,24 +168,24 @@ export const DiskServiceLive = Layer.effect(
       getStats,
 
       discover: (paths: string[]) =>
-        Effect.all(paths.map(getStats), { concurrency: "unbounded" }),
+        Effect.forEach(paths, getStats, { concurrency: "unbounded" }),
 
-      autoDiscover: () =>
-        pipe(
-          fs.readDirectory("/mnt"),
-          Effect.map((entries) =>
+      autoDiscover: pipe(
+        fs.readDirectory("/mnt"),
+        Effect.mapBoth({
+          onSuccess: (entries) =>
             entries
               .filter((name) => /^disk\d+$/.test(name))
               .map((name) => `/mnt/${name}`)
-              .sort((a, b) => {
+              .toSorted((a, b) => {
                 // Sort numerically: disk1, disk2, disk10
                 const numA = parseInt(a.replace("/mnt/disk", ""), 10)
                 const numB = parseInt(b.replace("/mnt/disk", ""), 10)
                 return numA - numB
-              })
-          ),
-          Effect.mapError((e) => fromPlatformError("/mnt", e))
-        ),
+              }),
+          onFailure: (e) => fromPlatformError("/mnt", e),
+        })
+      ),
     }
   })
 )
